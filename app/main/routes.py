@@ -3,13 +3,16 @@ from flask import render_template, flash, redirect, url_for, request, g, \
     jsonify, current_app
 from flask_login import current_user, login_required
 from flask_babel import _, get_locale
-from guess_language import guess_language
-from app import db
-from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm, \
-    MessageForm
-from app.models import User, Post, Message, Notification
-from app.translate import translate
-from app.main import bp
+# from guess_language import guess_language
+from .. import db
+from .forms import EditProfileForm, EmptyForm, PostForm, SearchForm, MessageForm
+from ..models import User, Post, Message, Notification
+from ..translate import translate
+from . import bp
+
+
+def guess_language(x):
+    return 'en'
 
 
 @bp.before_app_request
@@ -30,8 +33,7 @@ def index():
         language = guess_language(form.post.data)
         if language == 'UNKNOWN' or len(language) > 5:
             language = ''
-        post = Post(body=form.post.data, author=current_user,
-                    language=language)
+        post = Post(body=form.post.data, author=current_user, language=language)
         db.session.add(post)
         db.session.commit()
         flash(_('Your post is now live!'))

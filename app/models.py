@@ -9,9 +9,18 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import redis
-import rq
-from app import db, login
-from app.search import add_to_index, remove_from_index, query_index
+# import rq
+from . import db, login
+# from app.search import add_to_index, remove_from_index, query_index
+
+def query_index(*args):
+    return 0,0
+
+def remove_from_index(*args):
+    pass
+
+def add_to_index(*args):
+    pass
 
 
 class SearchableMixin(object):
@@ -282,11 +291,12 @@ class Task(db.Model):
     complete = db.Column(db.Boolean, default=False)
 
     def get_rq_job(self):
-        try:
-            rq_job = rq.job.Job.fetch(self.id, connection=current_app.redis)
-        except (redis.exceptions.RedisError, rq.exceptions.NoSuchJobError):
-            return None
-        return rq_job
+        return None
+        # try:
+        #     rq_job = rq.job.Job.fetch(self.id, connection=current_app.redis)
+        # except (redis.exceptions.RedisError, rq.exceptions.NoSuchJobError):
+        #     return None
+        # return rq_job
 
     def get_progress(self):
         job = self.get_rq_job()
