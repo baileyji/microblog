@@ -2,10 +2,14 @@ import json
 import sys
 import time
 from flask import render_template
-from rq import get_current_job
-from app import create_app, db
-from app.models import User, Post, Task
-from app.email import send_email
+# from rq import get_current_job
+from . import create_app, db
+from .models import User, Post, Task
+from .email import send_email
+
+def get_current_job(*args):
+    return None
+
 
 app = create_app()
 app.app_context().push()

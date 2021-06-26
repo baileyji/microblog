@@ -1,3 +1,5 @@
+conda install flask-wtf flask-bootstrap flask-migrate flask-mail flask-login flask-babel flask-SQLAlchemy pyjwt Flask-HTTPAuth
+
 alembic==0.9.6
 Babel==2.5.1
 blinker==1.4
@@ -11,6 +13,7 @@ email-validator==1.1.2
 Flask==1.1.2
 Flask-Babel==2.0.0
 Flask-Bootstrap==3.3.7.1
+Bootstrap-Flask
 Flask-HTTPAuth==4.2.0
 Flask-Login==0.5.0
 Flask-Mail==0.9.1
@@ -18,7 +21,7 @@ Flask-Migrate==2.5.3
 Flask-Moment==0.11.0
 Flask-SQLAlchemy==2.4.4
 Flask-WTF==0.14.3
-guess-language-spirit==0.5.3
+# guess-language-spirit==0.5.3
 idna==2.6
 itsdangerous==0.24
 Jinja2==2.11.2

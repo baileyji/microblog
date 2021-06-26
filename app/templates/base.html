@@ -1,53 +1,46 @@
-{% extends 'bootstrap/base.html' %}
+{% extends 'base_bootstrap.html' %}
+{% from 'bootstrap/form.html' import render_form, render_field %}
+{% from 'bootstrap/nav.html' import render_nav_item %}
 
 {% block title %}
-    {% if title %}{{ title }} - Microblog{% else %}{{ _('Welcome to Microblog') }}{% endif %}
+    {% if title %}{{ title }} - Cloudlight{% else %}{{ _('Cloudlight') }}{% endif %}
+{% endblock %}
+
+{% block styles %}
+{{super()}}
+<link rel="stylesheet" href="{{ url_for('static', filename='custom.css') }}">
 {% endblock %}
 
 {% block navbar %}
-    <nav class="navbar navbar-default">
-        <div class="container">
-            <div class="navbar-header">
-                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
-                    <span class="sr-only">Toggle navigation</span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                </button>
-                <a class="navbar-brand" href="{{ url_for('main.index') }}">Microblog</a>
+
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+      <a class="navbar-brand" href="{{url_for('main.index')}}">{{_('Cloudlight')}}</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNavDropdown">
+          <ul class="navbar-nav">
+            {{ render_nav_item('main.lamp', _('Lamp'), use_li=True) }}
+              {{ render_nav_item('main.status', _('Status'), use_li=True) }}
+            <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink"
+                   data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Master Controls</a>
+            <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+                <input class="dropdown-item" type="range" id="redislive:master_vol" value=".5" name="mastervol">
+                <input class="dropdown-item" type="range" id="redislive:master_bri" value=".5" name="mastervol">
             </div>
-            <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-                <ul class="nav navbar-nav">
-                    <li><a href="{{ url_for('main.index') }}">{{ _('Home') }}</a></li>
-                    <li><a href="{{ url_for('main.explore') }}">{{ _('Explore') }}</a></li>
-                </ul>
-                {% if g.search_form %}
-                <form class="navbar-form navbar-left" method="get" action="{{ url_for('main.search') }}">
-                    <div class="form-group">
-                        {{ g.search_form.q(size=20, class='form-control', placeholder=g.search_form.q.label.text) }}
-                    </div>
-                </form>
-                {% endif %}
-                <ul class="nav navbar-nav navbar-right">
-                    {% if current_user.is_anonymous %}
-                    <li><a href="{{ url_for('auth.login') }}">{{ _('Login') }}</a></li>
-                    {% else %}
-                    <li>
-                        <a href="{{ url_for('main.messages') }}">{{ _('Messages') }}
-                            {% set new_messages = current_user.new_messages() %}
-                            <span id="message_count" class="badge"
-                                  style="visibility: {% if new_messages %}visible
-                                                     {% else %}hidden{% endif %};">
-                                {{ new_messages }}
-                            </span>
-                        </a>
-                    </li>
-                    <li><a href="{{ url_for('main.user', username=current_user.username) }}">{{ _('Profile') }}</a></li>
-                    <li><a href="{{ url_for('auth.logout') }}">{{ _('Logout') }}</a></li>
-                    {% endif %}
-                </ul>
-            </div>
-        </div>
+          </li>
+      </div>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+          {% if current_user.is_anonymous %}
+          {{ render_nav_item('auth.login', _('Login'), use_li=True) }}
+          {% else %}
+          {{ render_nav_item('main.user', _('Profile'), use_li=True, username=current_user.username) }}
+          {{ render_nav_item('auth.logout', _('Logout'), use_li=True) }}
+          {% endif %}
+      </ul>
+
     </nav>
 {% endblock %}
 
@@ -83,16 +76,23 @@
     {{ moment.include_moment() }}
     {{ moment.lang(g.locale) }}
     <script>
-        function translate(sourceElem, destElem, sourceLang, destLang) {
-            $(destElem).html('<img src="{{ url_for('static', filename='loading.gif') }}">');
-            $.post('/translate', {
-                text: $(sourceElem).text(),
-                source_language: sourceLang,
-                dest_language: destLang
+        function livecontrol(event) {
+            var value;
+            switch (event.target.type) {
+                case 'checkbox':
+                    value = event.target.checked
+                    break;
+                default:
+                    value = event.target.value;
+            }
+            $.post("{{ url_for('main.redis') }}", {
+                source: event.target.id,
+                value: value,
+                element: event.target.type
             }).done(function(response) {
-                $(destElem).text(response['text'])
+
             }).fail(function() {
-                $(destElem).text("{{ _('Error: Could not contact server.') }}");
+                event.target.value="100";
             });
         }
         $(function () {
@@ -144,28 +144,55 @@
         function set_task_progress(task_id, progress) {
             $('#' + task_id + '-progress').text(progress);
         }
+        function set_redis_input() {
+            $("[id^=redisinput]").on('input', livecontrol);
+            $("[id^=redischange]").on('change', livecontrol);
+        }
+        set_redis_input();
         {% if current_user.is_authenticated %}
-        $(function() {
-            var since = 0;
-            setInterval(function() {
-                $.ajax('{{ url_for('main.notifications') }}?since=' + since).done(
-                    function(notifications) {
-                        for (var i = 0; i < notifications.length; i++) {
-                            switch (notifications[i].name) {
-                                case 'unread_message_count':
-                                    set_message_count(notifications[i].data);
-                                    break;
-                                case 'task_progress':
-                                    set_task_progress(notifications[i].data.task_id,
-                                        notifications[i].data.progress);
-                                    break;
-                            }
-                            since = notifications[i].timestamp;
-                        }
-                    }
-                );
-            }, 10000);
-        });
+        // function sse() {
+        var source = new EventSource('{{url_for("main.stream")}}');
+        source.addEventListener("update", function (event) {
+            var data = JSON.parse(event.data);
+            Object.entries(data).forEach(function([key, value]) {
+                // console.log("#" + key, value)
+                $("#" + key).text(value)
+                // set update blinker
+            });
+        }, false);
+        source.addEventListener("open", function (e) {
+            console.log('Connection was opened: ', e);
+        }, false);
+        source.addEventListener("error", function (e) {
+            console.log("Connection errored out: ", e);
+        }, false);
+        source.addEventListener("plotupdate", function (event) {
+            var update = JSON.parse(event.data);
+//          var array_data = JSON.parse(update['id'])
+            var elem = document.getElementById(update['id']);
+            if (elem) {
+                switch (update['kind']) {
+                    case "full":
+                        Plotly.react(update['id'], JSON.parse(update['data']));
+                        break;
+                    case "partial":
+                        Plotly.extendTraces(update['id'], {x: [update['data']['x']], y: [update['data']['y']]}, [0]);
+                        break;
+                }
+            }
+        }, false);
+        // }
+        // sse()
         {% endif %}
+        function htmlfor(sourceElem, destElem) {
+            // $(destElem).html('<img src="{{ url_for('static', filename='loading.gif') }}">');
+            $.post('/modeform', {
+                text: $(sourceElem).text(),
+            }).done(function(response) {
+                $(destElem).html(response['html'])
+            }).fail(function() {
+                $(destElem).text("{{ _('Error: Could not contact server.') }}");
+            });
+        }
     </script>
 {% endblock %}

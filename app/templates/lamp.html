@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from 'bootstrap/form.html' import render_form, render_field %}
+
+{% block app_content %}
+
+<div class="dropdown">
+  <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+    Lamp Mode
+  </button>
+  <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+      {% for mode in modes %}
+      <a class="dropdown-item" id="{{mode}}-link" href="javascript:htmlfor('#{{mode}}-link', '#mode-form');">{{mode}}</a>
+      {% endfor %}
+  </div>
+</div>
+
+<span id="mode-form">
+    {% if form %}
+    {% include '_mode_form.html' %}
+    {% endif %}
+</span>
+
+{% endblock %}

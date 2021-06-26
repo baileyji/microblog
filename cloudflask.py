@@ -1,5 +1,13 @@
-from .app import create_app, db, cli
-from .app.models import User, Post, Message, Notification, Task
+try:
+    from .app import create_app, db, cli
+    from .app.models import User, Post, Message, Notification, Task
+except ImportError:
+    from app import create_app, db, cli
+    from app.models import User, Post, Message, Notification, Task
+
+from cloudlight.util import setup_logging
+
+setup_logging('cloud-cli')
 
 app = create_app()
 cli.register(app)
