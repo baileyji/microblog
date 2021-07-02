@@ -10,11 +10,11 @@ from flask_bootstrap import Bootstrap
 from flask_moment import Moment
 from flask_babel import Babel, lazy_gettext as _l
 import cloudlight.cloudredis as cloudredis
-# import rq
-try:
-    from ..config import Config
-except ValueError:
-    from config import Config
+
+# try:
+from ..config import Config
+# except ValueError:
+#     from config import Config
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -96,7 +96,8 @@ def create_app(config_class=Config):
 def get_locale():
     return request.accept_languages.best_match(current_app.config['LANGUAGES'])
 
-try:
-    from ..app import models
-except:
-    from app import models
+from . import models
+# try:
+#     from ..app import models
+# except:
+#     from app import models

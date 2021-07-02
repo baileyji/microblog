@@ -24,10 +24,10 @@ class ColorField(TextAreaField):
     # Set the widget for this custom field
     widget = wtforms.widgets.html5.ColorInput()
 
+
 class CloudControl(FlaskForm):
     speaker_connected = BooleanField()
     muted = BooleanField()
-    muted = M
 
 
 # def select_form_factory(keystr, name):
