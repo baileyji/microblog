@@ -10,9 +10,10 @@ from flask_bootstrap import Bootstrap
 from flask_moment import Moment
 from flask_babel import Babel, lazy_gettext as _l
 import cloudlight.cloudredis as cloudredis
-
+import threading
 # try:
-from ..config import Config
+from ...config import Config
+from ...config import REDIS_SCHEMA
 # except ValueError:
 #     from config import Config
 
@@ -26,6 +27,72 @@ bootstrap = Bootstrap()
 moment = Moment()
 babel = Babel()
 
+import queue
+import numpy as np
+
+def event_stream():
+    for _, v in current_app.redis.listen('chat'):
+        yield f'data: {v}\n\n'
+
+
+def get_plot_data(redis, id, t0, t1):
+    import plotly
+    import plotly.express as px
+    import json
+    import numpy as np
+    # times, vals = redis.redis_ts.read(id, t0, t1)
+    times=np.arange(100)+132
+    vals=np.random.uniform(size=100)
+    # plot_data = [{'x': times,'y': vals,'name': title}]
+    # plot_layout = {'title': title}
+    # plot_config = {'responsive': True}
+    # d = json.dumps(plot_data, cls=plotly.utils.PlotlyJSONEncoder)
+    # l = json.dumps(plot_layout, cls=plotly.utils.PlotlyJSONEncoder)
+    # c = json.dumps(plot_config, cls=plotly.utils.PlotlyJSONEncoder)
+
+    fig = px.line(x=times, y=vals, title='Temps')
+    fig.layout.datarevision = t0
+    # set data_revision based on time interval
+    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+
+
+class MessageAnnouncer:
+    def __init__(self):
+        self.listeners = []
+
+    def listen(self):
+        self.listeners.append(queue.Queue(maxsize=5))
+        return self.listeners[-1]
+
+    def announce(self, msg):
+        # We go in reverse order because we might have to delete an element, which will shift the
+        # indices backward
+        from logging import getLogger
+        # getLogger(__name__).info(f'Announcing {msg}')
+        for i in reversed(range(len(self.listeners))):
+            try:
+                self.listeners[i].put_nowait(msg)
+            except queue.Full:
+                del self.listeners[i]
+
+
+def datagen(redis, announcer):
+    import json, time
+    for k, v in redis.listen(REDIS_SCHEMA['keys']):
+
+        event = 'update'
+        data = {k:v}
+
+        # plotid = 'temp:value'
+        # since = None
+        # kind = 'full' if since is None else 'partial'
+        # new = list(zip(*redis.range(plotid, since)))
+        # data = {'id': f'redisplot:{plotid}', 'kind': kind, 'data': {'x': new[0], 'y': new[1]}}
+
+        announcer.announce(f"event:{event}\nretry:5\ndata: {json.dumps(data)}\n\n")
+
+    datalistener = threading.Thread(target=datagen, args=(app.redis, app.announcer), daemon=True)
+    datalistener.start()
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -40,7 +107,11 @@ def create_app(config_class=Config):
     babel.init_app(app)
     cloudredis.setup_redis()
     app.redis = cloudredis.redis #Redis.from_url(app.config['REDIS_URL'])
-    # app.task_queue = rq.Queue('microblog-tasks', connection=app.redis)
+
+    # app.announcer = MessageAnnouncer()
+    # datalistener = threading.Thread(target=datagen, args=(app.redis, app.announcer), daemon=True)
+    # datalistener.start()
+
 
     from .errors import bp as errors_bp
     app.register_blueprint(errors_bp)

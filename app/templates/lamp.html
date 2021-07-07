@@ -8,11 +8,12 @@
     Lamp Mode
   </button>
   <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-      {% for mode in modes %}
-      <a class="dropdown-item" id="{{mode}}-link" href="javascript:htmlfor('#{{mode}}-link', '#mode-form');">{{mode}}</a>
+      {% for key, mode in modes %}
+      <a class="dropdown-item" id="{{key}}-link" href="javascript:htmlfor('{{key}}', '#mode-form');">{{mode}}</a>
       {% endfor %}
   </div>
 </div>
+
 
 <span id="mode-form">
     {% if form %}

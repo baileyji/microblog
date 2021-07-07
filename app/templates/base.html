@@ -26,10 +26,16 @@
                 <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink"
                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Master Controls</a>
             <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-                <input class="dropdown-item" type="range" id="redislive:master_vol" value=".5" name="mastervol">
-                <input class="dropdown-item" type="range" id="redislive:master_bri" value=".5" name="mastervol">
+                <span>
+                    Volume
+                <input class="dropdown-item" type="range" id="redisinput:speaker:volume"
+                       value="{{g.redis.read('speaker:volume')}}" name="mastervol" min="0" max="1" step="0.01"></span>
+                <span>
+                Brightness <input class="dropdown-item" type="range" id="redisinput:lamp:brightness"
+                       value="{{g.redis.read('lamp:brightness')}}" name="masterbri" min="0" max="1" step="0.01"></span>
             </div>
           </li>
+          </ul>
       </div>
       </ul>
       <ul class="nav navbar-nav navbar-right">
@@ -84,15 +90,15 @@
                     break;
                 default:
                     value = event.target.value;
-            }
-            $.post("{{ url_for('main.redis') }}", {
+            } //
+            $.post("{{ url_for('main.rediscontrol') }}", {
                 source: event.target.id,
                 value: value,
                 element: event.target.type
             }).done(function(response) {
 
             }).fail(function() {
-                event.target.value="100";
+                event.target.value="0";
             });
         }
         $(function () {
@@ -144,11 +150,11 @@
         function set_task_progress(task_id, progress) {
             $('#' + task_id + '-progress').text(progress);
         }
-        function set_redis_input() {
+        function setup_redis_inputs() {
             $("[id^=redisinput]").on('input', livecontrol);
             $("[id^=redischange]").on('change', livecontrol);
         }
-        set_redis_input();
+        setup_redis_inputs();
         {% if current_user.is_authenticated %}
         // function sse() {
         var source = new EventSource('{{url_for("main.stream")}}');
@@ -156,7 +162,7 @@
             var data = JSON.parse(event.data);
             Object.entries(data).forEach(function([key, value]) {
                 // console.log("#" + key, value)
-                $("#" + key).text(value)
+                $(document.getElementById(key)).text(value)
                 // set update blinker
             });
         }, false);
@@ -184,10 +190,10 @@
         // }
         // sse()
         {% endif %}
-        function htmlfor(sourceElem, destElem) {
+        function htmlfor(name, destElem) {
             // $(destElem).html('<img src="{{ url_for('static', filename='loading.gif') }}">');
             $.post('/modeform', {
-                text: $(sourceElem).text(),
+                data: name,
             }).done(function(response) {
                 $(destElem).html(response['html'])
             }).fail(function() {

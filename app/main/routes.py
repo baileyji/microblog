@@ -2,15 +2,23 @@ from datetime import datetime
 
 import numpy as np
 from flask import render_template, flash, redirect, url_for, request, g, \
-    jsonify, current_app, Response
+    jsonify, current_app, Response, copy_current_request_context
 from flask_login import current_user, login_required
 from flask_babel import _, get_locale
+
+import cloudlight.fadecandy
 from .. import db
 from .forms import EditProfileForm, EmptyForm, PostForm, SearchForm, MessageForm
 from ..models import User, Post, Message, Notification
 from ..translate import translate
 from . import bp
 from ..api.errors import bad_request
+import time, json, threading
+import plotly
+import plotly.express as px
+import numpy as np
+import json
+from .helpers import *
 
 
 def guess_language(x):
@@ -22,7 +30,7 @@ def before_request():
     if current_user.is_authenticated:
         current_user.last_seen = datetime.utcnow()
         db.session.commit()
-        # g.search_form = SearchForm()
+    # g.announcer = current_app.announcer
     g.locale = str(get_locale())
     g.redis = current_app.redis
 
@@ -47,23 +55,24 @@ def index():
         flash(_('Your post is now live!'))
         return redirect(url_for('main.index'))
     page = request.args.get('page', 1, type=int)
-    posts = current_user.followed_posts().paginate(
-        page, current_app.config['POSTS_PER_PAGE'], False)
-    next_url = url_for('main.index', page=posts.next_num) \
-        if posts.has_next else None
-    prev_url = url_for('main.index', page=posts.prev_num) \
-        if posts.has_prev else None
-    return render_template('index.html', title=_('Home'), form=form,
-                           posts=posts.items, next_url=next_url,
+    posts = current_user.followed_posts().paginate(page, current_app.config['POSTS_PER_PAGE'], False)
+    next_url = url_for('main.index', page=posts.next_num) if posts.has_next else None
+    prev_url = url_for('main.index', page=posts.prev_num) if posts.has_prev else None
+    return render_template('index.html', title=_('Home'), form=form, posts=posts.items, next_url=next_url,
                            prev_url=prev_url)
 
 
-@bp.route('/redis', methods=['POST', 'GET'])
+@bp.route('/rediscontrol', methods=['POST', 'GET'])
 @login_required
-def redis():
+def rediscontrol():
+    """Handle read and write requests for redis keys"""
     if request.method == 'POST':
         try:
-            current_app.redis.store(request.form['source'].partition(':')[2], request.form['value'])
+            val = float(request.form['value'])
+        except ValueError:
+            val = request.form['value']
+        try:
+            current_app.redis.store(request.form['source'].partition(':')[2], val)
             return jsonify({'success': True})
         except:
             current_app.logger.error('post error', exc_info=True)
@@ -75,133 +84,42 @@ def redis():
     return bad_request('control failed')
 
 
-def event_stream():
-    for _, v in current_app.redis.listen('chat'):
-        yield f'data: {v}\n\n'
 
+# Controls need to be named with their redis key
 
-def get_status_info(redis):
-    keys = ('master_vol', 'speaker_status', 'master_brightness')
-    names = ('master_vol', 'Brightness', 'Many', 'Other', 'Settings')
-    return {k: str(np.random.uniform()) for k in keys}
-    # return redis.read(keys, error_missing=False)
-
-
-def get_plot_data(redis, id, t0, t1):
-    import plotly
-    import plotly.express as px
-    import json
-    import numpy as np
-    # times, vals = redis.redis_ts.read(id, t0, t1)
-    times=np.arange(100)+132
-    vals=np.random.uniform(size=100)
-    # plot_data = [{'x': times,'y': vals,'name': title}]
-    # plot_layout = {'title': title}
-    # plot_config = {'responsive': True}
-    # d = json.dumps(plot_data, cls=plotly.utils.PlotlyJSONEncoder)
-    # l = json.dumps(plot_layout, cls=plotly.utils.PlotlyJSONEncoder)
-    # c = json.dumps(plot_config, cls=plotly.utils.PlotlyJSONEncoder)
-
-    fig = px.line(x=times, y=vals, title='Temps')
-    fig.layout.datarevision = t0
-    # set data_revision based on time interval
-    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-
-_foo=0
-def get_plot_points_since(redis, id, t0):
-    # new = redis.redis_ts.read(id, t0)
-    import json
-    global _foo
-
-    new = np.arange(100) + _foo, np.random.uniform(size=100)
-    _foo +=100
-    return {'x': new[0].tolist(), 'y': new[1].tolist()}
-
-
-import queue
-class MessageAnnouncer:
-    def __init__(self):
-        self.listeners = []
-
-    def listen(self):
-        self.listeners.append(queue.Queue(maxsize=5))
-        return self.listeners[-1]
-
-    def announce(self, msg):
-        # We go in reverse order because we might have to delete an element, which will shift the
-        # indices backward
-        from logging import getLogger
-        # getLogger(__name__).info(f'Announcing {msg}')
-        for i in reversed(range(len(self.listeners))):
-            try:
-                self.listeners[i].put_nowait(msg)
-            except queue.Full:
-                del self.listeners[i]
-
-
-announcer = MessageAnnouncer()
-
-
-def datagen(redis):
-    elapsed=0
-    plotid = 'temp-plot'
-    import json, time
-    while True:
-        if not elapsed%2:
-            event = 'update'
-            data = get_status_info(redis)
-        elif not elapsed%23:
-            event = 'plotupdate'
-            data = {'id': plotid, 'kind': 'full', 'data': get_plot_data(redis, plotid, 0, 1)}
-        elif not elapsed%3:
-            event = 'plotupdate'
-            data = {'id': plotid, 'kind': 'partial', 'data': get_plot_points_since(redis, plotid, 0)}
-
-        announcer.announce(f"event:{event}\nretry:5\ndata: {json.dumps(data)}\n\n")
-        time.sleep(1)
-        elapsed+=1
 
 
 @bp.route('/stream',  methods=['GET'])
 @login_required
 def stream():
-    import time, json, threading
-    try:
-        g.datathread
-    except AttributeError:
-        g.datathread = threading.Thread(target=datagen, args=(current_app.redis,), daemon=True)
-        g.datathread.start()
+    from ....config import REDIS_SCHEMA
+    import cloudlight.cloudredis as clr
+    # @copy_current_request_context
+    def _stream():
+        for k, v in clr.redis.listen(REDIS_SCHEMA['keys']):
+            event = 'update'
+            data = {k: v}
 
-    def event_stream():
-        messages = announcer.listen()  # returns a queue.Queue
-        while True:
-            yield messages.get()  # blocks until a new message arrives
-    return current_app.response_class(event_stream(), mimetype="text/event-stream")
+            # plotid = 'temp:value'
+            # since = None
+            # kind = 'full' if since is None else 'partial'
+            # new = list(zip(*redis.range(plotid, since)))
+            # data = {'id': f'redisplot:{plotid}', 'kind': kind, 'data': {'x': new[0], 'y': new[1]}}
 
+            msg = f"event:{event}\nretry:5\ndata: {json.dumps(data)}\n\n"
+            yield msg
+    return current_app.response_class(_stream(), mimetype="text/event-stream")
 
-@bp.route('/lamp')
-@login_required
-def lamp():
-    modes = ('Lamp', 'Starfall', 'Fireplace', 'Acidtrip')
-    from .forms import LampForm, StarfallForm, MasterControlForm
-    return render_template('lamp.html', title=_('Lamp'), modes=modes, masterform=MasterControlForm(),
-                           form=StarfallForm())
 
 
 @bp.route('/status')
 @login_required
 def status():
-    from .forms import MasterControlForm
+    from ....config import REDIS_SCHEMA
     table = [('Setting', 'Value')]
-    table += [(k, k, v) for k, v in get_status_info(current_app.redis).items()]
+    table += [(k, k, v) for k, v in current_app.redis.read(REDIS_SCHEMA['keys']).items()]
 
-
-    import plotly
-    import plotly.express as px
-    import numpy as np
-    import json
-    times=np.arange(100)+132
-    vals=np.random.uniform(size=100)
+    times, vals = list(zip(*g.redis.range('temp:value')))
     # plot_data = [{'x': times,'y': vals,'name': title}]
     # plot_layout = {'title': title}
     # plot_config = {'responsive': True}
@@ -210,48 +128,64 @@ def status():
     # c = json.dumps(plot_config, cls=plotly.utils.PlotlyJSONEncoder)
 
     fig = px.line(x=times, y=vals, title='Temps')
-    # set data_revision based on time interval
+    # TODO set data_revision based on time interval
     tempfig = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
-    return render_template('status.html', title=_('Settings'), table=table,
-                           masterform=MasterControlForm(),
-                           tempfig=tempfig)
+    return render_template('status.html', title=_('Settings'), table=table, tempfig=tempfig)
 
 
+# @bp.route('/plot', methods=['POST'])
+# def plot():
+#
+#     plot_name = request.form['name']
+#     import plotly
+#     import plotly.express as px
+#     import numpy as np
+#     import json
+#     times=np.arange(100)+132
+#     vals=np.random.uniform(size=100)
+#     # plot_data = [{'x': times,'y': vals,'name': title}]
+#     # plot_layout = {'title': title}
+#     # plot_config = {'responsive': True}
+#     # d = json.dumps(plot_data, cls=plotly.utils.PlotlyJSONEncoder)
+#     # l = json.dumps(plot_layout, cls=plotly.utils.PlotlyJSONEncoder)
+#     # c = json.dumps(plot_config, cls=plotly.utils.PlotlyJSONEncoder)
+#
+#     fig = px.line(x=times, y=vals, title='Temps', responsive=True)
+#     return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
-@bp.route('/plot', methods=['POST'])
-def plot():
+@bp.route('/lamp', methods=['GET', 'POST'])
+@login_required
+def lamp():
+    from cloudlight.fadecandy import EFFECTS
+    modes = tuple((key, e.name) for key, e in cloudlight.fadecandy.EFFECTS.items())
+    if request.method == 'POST':
+        mode = request.form['mode_key']
+        e = EFFECTS[mode]
+        f = e.form(mode_name=e.name, mode_key=e.key)
+        if f.validate_on_submit():
+            settings = f.data
+            for k in ('csrf_token', 'mode_name', 'mode_key', 'submit'):
+                settings.pop(k)
+            g.redis.store(f'lamp:{mode}:settings', settings)
+            g.redis.store(f'lamp:mode', mode)
+            return redirect(url_for('main.lamp'))
+    else:
+        f = cloudlight.fadecandy.build_form(g.redis.read('lamp:mode'))
 
-    plot_name = request.form['name']
-    import plotly
-    import plotly.express as px
-    import numpy as np
-    import json
-    times=np.arange(100)+132
-    vals=np.random.uniform(size=100)
-    # plot_data = [{'x': times,'y': vals,'name': title}]
-    # plot_layout = {'title': title}
-    # plot_config = {'responsive': True}
-    # d = json.dumps(plot_data, cls=plotly.utils.PlotlyJSONEncoder)
-    # l = json.dumps(plot_layout, cls=plotly.utils.PlotlyJSONEncoder)
-    # c = json.dumps(plot_config, cls=plotly.utils.PlotlyJSONEncoder)
-
-    fig = px.line(x=times, y=vals, title='Temps', responsive=True)
-    return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-
+    return render_template('lamp.html', title=_('Lamp'), modes=modes, form=f)
 
 
 @bp.route('/modeform', methods=['POST'])
 @login_required
 def modeform():
-    from .forms import LampForm, StarfallForm, FireplaceForm, AcidtripForm
-    forms = {'Lamp': LampForm,
-             'Starfall': StarfallForm,
-             'Fireplace': FireplaceForm,
-             'Acidtrip': AcidtripForm}
-    mode = request.form['text']
-    return jsonify({'html': render_template('_mode_form.html', mode=mode, form=forms[mode]())})
-
+    from .forms import generate_effect_form
+    mode = request.form['data']
+    try:
+        form = cloudlight.fadecandy.build_form(mode)
+        return jsonify({'html': render_template('_mode_form.html', form=form)})
+    except KeyError:
+        return bad_request(f'"{mode}" is not known')
 
 
 @bp.route('/user/<username>')

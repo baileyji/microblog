@@ -51,16 +51,5 @@
         Plotly.react('temp-plot', data); //{#{{ temp_plot[0] | safe }}, {{ temp_plot[1] | safe }}, {{ temp_plot[2] | safe }});#}}
         Plotly.react('vol-plot', data);
         Plotly.react('mic-plot', data);
-
-        function htmlfor(sourceElem, destElem) {
-            $(destElem).html('<img src="{{ url_for('static', filename='loading.gif') }}">');
-            $.post('/modeform', {
-                text: $(sourceElem).text(),
-            }).done(function(response) {
-                $(destElem).html(response['html'])
-            }).fail(function() {
-                $(destElem).text("{{ _('Error: Could not contact server.') }}");
-            });
-        }
     </script>
 {% endblock %}

@@ -8,7 +8,7 @@ from .app.models import User, Post, Message, Notification, Task
 
 from ..util import setup_logging
 
-setup_logging('cloud-cli')
+setup_logging('cloud-flask')
 
 app = create_app()
 cli.register(app)

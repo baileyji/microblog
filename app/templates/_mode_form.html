@@ -1,10 +1,7 @@
 {% from 'bootstrap/form.html' import render_form, render_field %}
-<h3>{{ _(mode) }}</h3>
-<span>
-<!--<div class="row">-->
-<!--    <div class="col-md-4">-->
-    <div style="width: 50%">
-        {{ render_form(form) }}
-    </div>
-<!--</div>-->
-    </span>
+<!--{% if form.mode_name.data != 'Off' %}-->
+<h3>{{ _(form.mode_name.data) }}</h3>
+<div style="width: 50%">{{ render_form(form) }} </div>
+<!--{% else %}-->
+<!--<h4>{{ _("Lamp is Off") }}</h4>-->
+<!--{% endif %}-->
