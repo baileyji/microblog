@@ -32,7 +32,14 @@
                        value="{{g.redis.read('speaker:volume')}}" name="mastervol" min="0" max="1" step="0.01"></span>
                 <span>
                 Brightness <input class="dropdown-item" type="range" id="redisinput:lamp:brightness"
-                       value="{{g.redis.read('lamp:brightness')}}" name="masterbri" min="0" max="1" step="0.01"></span>
+                       value="{{g.redis.read('lamp:brightness')}}" name="masterbri" min="0" max="1" step="0.01">
+                </span>
+                {% if g.show_livecolor %}
+                <span>
+                Color <input class="dropdown-item" type="color" id="redisinput:lamp:color"
+                       value="{{g.redis.read('lamp:color')}}" name="mastercolor">
+                </span>
+                {% endif %}
             </div>
           </li>
           </ul>

@@ -30,9 +30,9 @@ def before_request():
     if current_user.is_authenticated:
         current_user.last_seen = datetime.utcnow()
         db.session.commit()
-    # g.announcer = current_app.announcer
     g.locale = str(get_locale())
     g.redis = current_app.redis
+    g.mode = current_app.redis.read('lamp:mode')
 
 @bp.after_request
 def add_header(response):
@@ -171,19 +171,18 @@ def lamp():
             g.redis.store(f'lamp:mode', mode)
             return redirect(url_for('main.lamp'))
     else:
-        f = cloudlight.fadecandy.build_form(g.redis.read('lamp:mode'))
+        f = cloudlight.fadecandy.build_form(g.redis.read('lamp:mode'), g.redis)
 
-    return render_template('lamp.html', title=_('Lamp'), modes=modes, form=f)
+    return render_template('lamp.html', title=_('Lamp'), modes=modes, form=f, active_mode=g.mode)
 
 
 @bp.route('/modeform', methods=['POST'])
 @login_required
 def modeform():
-    from .forms import generate_effect_form
     mode = request.form['data']
     try:
-        form = cloudlight.fadecandy.build_form(mode)
-        return jsonify({'html': render_template('_mode_form.html', form=form)})
+        form = cloudlight.fadecandy.build_form(mode, g.redis)
+        return jsonify({'html': render_template('_mode_form.html', form=form, active_mode=g.mode)})
     except KeyError:
         return bad_request(f'"{mode}" is not known')
 
