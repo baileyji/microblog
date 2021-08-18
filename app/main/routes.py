@@ -119,40 +119,14 @@ def status():
     table = [('Setting', 'Value')]
     table += [(k, k, v) for k, v in current_app.redis.read(REDIS_SCHEMA['keys']).items()]
 
-    times, vals = list(zip(*g.redis.range('temp:value')))
-    # plot_data = [{'x': times,'y': vals,'name': title}]
-    # plot_layout = {'title': title}
-    # plot_config = {'responsive': True}
-    # d = json.dumps(plot_data, cls=plotly.utils.PlotlyJSONEncoder)
-    # l = json.dumps(plot_layout, cls=plotly.utils.PlotlyJSONEncoder)
-    # c = json.dumps(plot_config, cls=plotly.utils.PlotlyJSONEncoder)
-
+    times, vals = list(zip(*g.redis.range('temp:value_avg120000')))
+    times = np.array(times,dtype='datetime64[ms]')
     fig = px.line(x=times, y=vals, title='Temps')
     # TODO set data_revision based on time interval
     tempfig = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
     return render_template('status.html', title=_('Settings'), table=table, tempfig=tempfig)
 
-
-# @bp.route('/plot', methods=['POST'])
-# def plot():
-#
-#     plot_name = request.form['name']
-#     import plotly
-#     import plotly.express as px
-#     import numpy as np
-#     import json
-#     times=np.arange(100)+132
-#     vals=np.random.uniform(size=100)
-#     # plot_data = [{'x': times,'y': vals,'name': title}]
-#     # plot_layout = {'title': title}
-#     # plot_config = {'responsive': True}
-#     # d = json.dumps(plot_data, cls=plotly.utils.PlotlyJSONEncoder)
-#     # l = json.dumps(plot_layout, cls=plotly.utils.PlotlyJSONEncoder)
-#     # c = json.dumps(plot_config, cls=plotly.utils.PlotlyJSONEncoder)
-#
-#     fig = px.line(x=times, y=vals, title='Temps', responsive=True)
-#     return json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
 @bp.route('/lamp', methods=['GET', 'POST'])
 @login_required
@@ -168,7 +142,11 @@ def lamp():
             for k in ('csrf_token', 'mode_name', 'mode_key', 'submit'):
                 settings.pop(k)
             g.redis.store(f'lamp:{mode}:settings', settings)
-            g.redis.store(f'lamp:mode', mode)
+            if g.redis.read('lamp:mode') == mode:
+                g.redis.store(f'lamp:settings', True, publish_only=True)
+            else:
+                g.redis.store(f'lamp:mode', mode)
+
             return redirect(url_for('main.lamp'))
     else:
         f = cloudlight.fadecandy.build_form(g.redis.read('lamp:mode'), g.redis)
