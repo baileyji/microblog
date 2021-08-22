@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from 'bootstrap/form.html' import render_form, render_field %}
+
+{% block app_content %}
+    <div class="container-fluid">
+        <div class="row">
+            <main role="main" class="col-12">
+<!--            <main role="main" class="col-md-9 ml-sm-auto col-lg-10 pt-3 px-4">-->
+
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+                    <h1 class="h2">Help</h1>
+                    Some text
+                </div>
+
+                Some other text
+
+                <h2>Some Other Heading H2</h2>
+                <div>
+                    <h2>Some Other Heading H2_1</h2>
+                  <details>
+                    <h2>Some Other Heading H2_2</h2>
+                    <summary>Starfall <h2>Some Other Heading H3</h2></summary>
+                    <p>Some info about starfall</p>
+                  </details>
+
+                  <details>
+                    <summary>Architecture</summary>
+                    <p> description of how it all works.</p>
+                  </details>
+                </div>
+
+                Some more text
+                <button class="btn" type="button" id="reset-leds" > Restart LED Engine </button>
+                <button class="btn" type="button" id="toggle-leds" > Toggle LED Engine </button>
+                <button class="btn" type="button" id="reset-audio" > Restart Audio Engine </button>
+                <button class="btn" type="button" id="toggle-audio" > Toggle Audio Engine </button>
+                <button class="btn" type="button" id="email" > Email Logs </button>
+                <button class="btn" type="button" id="reset-database" > Reinitialize redis database </button>
+                <button class="btn" type="button" id="reboot" > Reboot </button>
+            </main>
+        </div>
+    </div>
+{% endblock %}

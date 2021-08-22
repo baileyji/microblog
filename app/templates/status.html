@@ -3,42 +3,40 @@
 
 {% block app_content %}
     <div class="container-fluid">
-        <div class="row">
-            <main role="main" class="col-12">
-<!--            <main role="main" class="col-md-9 ml-sm-auto col-lg-10 pt-3 px-4">-->
+        <main role="main" >
 
+            <div class="row">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
                     <h1 class="h2">Dashboard</h1>
                 </div>
+            </div>
 
-                <div class="row">
-                    <div class="col"> <div id="temp-plot"></div> </div>
-                    <div class="col"> <div id="vol-plot"></div> </div>
-                    <div class="col"> <div id="mic-plot"></div> </div>
-                </div> <!-- /.row -->
+            <div class="row">
+                <div class="col"> <div id="temp-plot" class="responsive-plot"></div> </div>
+                <div class="col"> <div id="bri-plot" class="responsive-plot"></div> </div>
+            </div>
 
-                <h2>Cloud Info</h2>
+            <div class="row">
+                <h2>All Settings</h2>
                 <div class="table-responsive">
                     <table class="table table-striped table-sm">
                         <thead>
-                        <tr>
-                            {% for col in table[0] %}
-                            <th>{{col}}</th>
-                            {% endfor %}
-                        </tr>
+                            <tr>
+                            {% for col in table[0] %} <th>{{col}}</th>{% endfor %}
+                            </tr>
                         </thead>
                         <tbody>
-                        {% for row in table[1:] %}
-                        <tr>
-                            <th>{{row[1]}}</th>
-                            <th id="{{row[0]}}">{{row[2]}}</th>
-                        </tr>
-                        {% endfor %}
+                            {% for row in table[1:] %}
+                            <tr>
+                                <th>{{row[1]}}</th>
+                                <th id="{{row[0]}}">{{row[2]}}</th>
+                            </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
-            </main>
-        </div>
+            </div>
+        </main>
     </div>
 {% endblock %}
 
@@ -47,9 +45,22 @@
     {{ super() }}
 
     <script>
+        source.addEventListener("plotupdate", function (event) {
+            var update = JSON.parse(event.data);
+            var elem = document.getElementById(update['id']);
+            if (elem) {
+                switch (update['kind']) {
+                    case "full":
+                        Plotly.react(update['id'], JSON.parse(update['data']));
+                        break;
+                    case "partial":
+                        Plotly.extendTraces(update['id'], {x: [update['data']['x']], y: [update['data']['y']]}, [0]);
+                        break;
+                }
+            }
+        }, false);
         var data = {{tempfig | safe}};
         Plotly.react('temp-plot', data); //{#{{ temp_plot[0] | safe }}, {{ temp_plot[1] | safe }}, {{ temp_plot[2] | safe }});#}}
-        // Plotly.react('vol-plot', data);
-        // Plotly.react('mic-plot', data);
+        // Plotly.react('bri-plot', data);
     </script>
 {% endblock %}
