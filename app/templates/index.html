@@ -9,7 +9,7 @@
   </button>
   <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
       {% for key, mode in modes %}
-      <a class="dropdown-item" id="{{key}}-link" href="javascript:htmlfor('{{key}}', '#mode-form');">{{mode}}</a>
+      <a class="dropdown-item" id="{{key}}-link" href="javascript:modeform('{{key}}', '#mode-form');">{{mode}}</a>
       {% endfor %}
   </div>
 </div>
@@ -21,4 +21,15 @@
     {% endif %}
 </span>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function modeform(name, destElem) {
+        // $(destElem).html('<img src="{{ url_for('static', filename='loading.gif') }}">');
+        $.post('/modeform', {data: name,
+        }).done(function(response) {$(destElem).html(response['html'])
+        }).fail(function() {$(destElem).text("{{ _('Error: Could not contact server.') }}");});
+    }
+</script>
 {% endblock %}

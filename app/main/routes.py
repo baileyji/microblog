@@ -1,3 +1,5 @@
+import os
+import subprocess
 from datetime import datetime
 
 import numpy as np
@@ -7,6 +9,8 @@ from flask_login import current_user, login_required
 from flask_babel import _, get_locale
 
 import cloudlight.fadecandy
+from cloudlight.util import get_services as cloudlight_services
+from cloudlight.util import get_service as cloudlight_service
 from .. import db
 from .forms import EmptyForm
 from ..models import User, Post, Message, Notification
@@ -18,6 +22,8 @@ import plotly
 import plotly.express as px
 import numpy as np
 import json
+from rq.job import Job
+from cloudlight.fadecandy import EFFECTS
 from .helpers import *
 
 
@@ -31,8 +37,10 @@ def before_request():
         current_user.last_seen = datetime.utcnow()
         db.session.commit()
     g.locale = str(get_locale())
-    g.redis = current_app.redis
-    g.mode = current_app.redis.read('lamp:mode')
+    redis = current_app.redis
+    # redis = cloudlight.cloudredis.setup_redis(use_schema=False, module=False)
+    g.redis = redis
+    g.mode = redis.read('lamp:mode')
 
 
 @bp.after_request
@@ -45,24 +53,6 @@ def add_header(response):
 @bp.route('/index', methods=['GET', 'POST'])
 @login_required
 def index():
-    # form = PostForm()
-    # if form.validate_on_submit():
-    #     language = guess_language(form.post.data)
-    #     if language == 'UNKNOWN' or len(language) > 5:
-    #         language = ''
-    #     post = Post(body=form.post.data, author=current_user, language=language)
-    #     db.session.add(post)
-    #     db.session.commit()
-    #     flash(_('Your post is now live!'))
-    #     return redirect(url_for('main.index'))
-    # page = request.args.get('page', 1, type=int)
-    # posts = current_user.followed_posts().paginate(page, current_app.config['POSTS_PER_PAGE'], False)
-    # next_url = url_for('main.index', page=posts.next_num) if posts.has_next else None
-    # prev_url = url_for('main.index', page=posts.prev_num) if posts.has_prev else None
-    # return render_template('index.html', title=_('Home'), form=form, posts=posts.items, next_url=next_url,
-    #                        prev_url=prev_url)
-
-    from cloudlight.fadecandy import EFFECTS
     modes = tuple((key, e.name) for key, e in cloudlight.fadecandy.EFFECTS.items())
     if request.method == 'POST':
         mode = request.form['mode_key']
@@ -133,6 +123,77 @@ def stream():
     return current_app.response_class(_stream(), mimetype="text/event-stream")
 
 
+@bp.route('/shutdown', methods=['POST'])
+@login_required
+def shutdown():
+    """data: shutdown|reboot """
+    cmd = request.form.get('data', '')
+    if cmd in ('shutdown', 'reboot'):
+        subprocess.Popen(['/home/pi/.local/bin/cloud-service-control', cmd])
+        flash(f'System going offline for {cmd}')
+        return jsonify({'success': True})
+    else:
+        return bad_request('Invalid shutdown command')
+
+
+@bp.route('/task', methods=['GET', 'POST'])
+@login_required
+def task():
+    from rq.job import NoSuchJobError
+    if request.method == 'POST':
+        id = request.form.get('id')
+        if id != 'email-logs':
+            return bad_request('Unknown task')
+        try:
+            job = Job.fetch(id, connection=g.redis.redis)
+            if job.is_failed or job.is_finished:
+                job.delete()
+                job = None
+        except NoSuchJobError:
+            job = None
+        if job:
+            flash(_(f'Task "{id} is currently pending'))
+            return bad_request(f'Task "{id}" in progress')
+        else:
+            current_app.task_queue.enqueue(f"cloudlight.cloudflask.app.tasks.{id.replace('-','_')}", job_id=id)
+            return jsonify({'success': True})
+
+    else:
+        id = request.args.get('id', '')
+        if not id:
+            return bad_request('Task id required')
+        try:
+            job = Job.fetch(id, connection=g.redis.redis)
+        except NoSuchJobError:
+            return bad_request('Unknown task')
+        status = job.get_status()
+        return jsonify({'done': status == 'finished', 'error': status != 'finished',
+                        'progress': job.meta.get('progress', 0)})
+
+
+@bp.route('/service', methods=['POST', 'GET'])
+@login_required
+def service():
+    """start, stop, enable, disable, restart"""
+    name = request.args.get('name', '')
+    try:
+        service = cloudlight_service(name)
+    except ValueError:
+        return bad_request(f'Service "{name}" does not exist.')
+    if request.method == 'POST':
+        service.control(request.form['data'])
+        return jsonify({'success': True})
+    else:
+        return jsonify(service.status_dict())
+
+
+# @bp.route('/favicon.ico')
+# def favicon():
+#     from flask import send_from_directory
+#     return send_from_directory(os.path.join(current_app.root_path, 'static'),
+#                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
+
 @bp.route('/status')
 @login_required
 def status():
@@ -155,16 +216,25 @@ def settings():
     return render_template('settings.html', title=_('Settings'))
 
 
-@bp.route('/off')
+@bp.route('/off', methods=['POST'])
 @login_required
 def off():
-    return index()
+    g.redis.store('lamp:mode', 'off')
+    return jsonify({'success': True})
 
 
 @bp.route('/help')
 @login_required
 def help():
-    return render_template('help.html', title=_('Help'))
+    from cloudlight.util import get_services as cloudlight_services
+    services = cloudlight_services()
+    from rq.job import NoSuchJobError
+    try:
+        job = Job.fetch('email-logs', connection=g.redis.redis)
+        exporting = job.get_status() in ('queued', 'started', 'deferred', 'scheduled')
+    except NoSuchJobError:
+        exporting = False
+    return render_template('help.html', title=_('Help'), services=services.values(), exporting=exporting)
 
 
 @bp.route('/pihole')

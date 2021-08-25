@@ -10,7 +10,11 @@ from flask_bootstrap import Bootstrap
 from flask_moment import Moment
 from flask_babel import Babel, lazy_gettext as _l
 import cloudlight.cloudredis as cloudredis
+from cloudlight.util import setup_logging
 import threading
+import rq
+import queue
+import numpy as np
 # try:
 from ...config import Config
 from ...config import REDIS_SCHEMA
@@ -27,8 +31,7 @@ bootstrap = Bootstrap()
 moment = Moment()
 babel = Babel()
 
-import queue
-import numpy as np
+
 
 def event_stream():
     for _, v in current_app.redis.listen('chat'):
@@ -106,9 +109,8 @@ def create_app(config_class=Config):
     bootstrap.init_app(app)
     moment.init_app(app)
     babel.init_app(app)
-    cloudredis.setup_redis()
-    app.redis = cloudredis.redis #Redis.from_url(app.config['REDIS_URL'])
-
+    app.redis = cloudredis.setup_redis() #Redis.from_url(app.config['REDIS_URL'])
+    app.task_queue = rq.Queue('cloudlight-tasks', connection=app.redis.redis)
     # app.announcer = MessageAnnouncer()
     # datalistener = threading.Thread(target=datagen, args=(app.redis, app.announcer), daemon=True)
     # datalistener.start()
@@ -158,6 +160,7 @@ def create_app(config_class=Config):
         #     app.logger.addHandler(file_handler)
         #
         # app.logger.setLevel(logging.INFO)
+        setup_logging('cloud-flask')
         app.logger.info('Cloudflask startup')
 
     return app

@@ -45,6 +45,24 @@
     {{ super() }}
 
     <script>
+        var data = {{tempfig | safe}};
+        Plotly.react('temp-plot', data); //{#{{ temp_plot[0] | safe }}, {{ temp_plot[1] | safe }}, {{ temp_plot[2] | safe }});#}}
+        // Plotly.react('bri-plot', data);
+
+        {% if current_user.is_authenticated %}
+        var source = new EventSource('{{url_for("main.stream")}}');
+        source.addEventListener("update", function (event) {
+            var data = JSON.parse(event.data);
+            Object.entries(data).forEach(function([key, value]) {
+                // console.log("#" + key, value)
+                $(document.getElementById(key)).text(value)
+                // set update blinker
+            });
+        }, false);
+        source.addEventListener("open", function (e) {console.log('Connection was opened: ', e);}, false);
+        source.addEventListener("error", function (e) {console.log("Connection errored out: ", e);}, false);
+        {% endif %}
+
         source.addEventListener("plotupdate", function (event) {
             var update = JSON.parse(event.data);
             var elem = document.getElementById(update['id']);
@@ -59,8 +77,6 @@
                 }
             }
         }, false);
-        var data = {{tempfig | safe}};
-        Plotly.react('temp-plot', data); //{#{{ temp_plot[0] | safe }}, {{ temp_plot[1] | safe }}, {{ temp_plot[2] | safe }});#}}
-        // Plotly.react('bri-plot', data);
+
     </script>
 {% endblock %}

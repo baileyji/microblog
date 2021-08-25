@@ -6,10 +6,10 @@
     {% if title %}{{ title }} - Cloudlight{% else %}{{ _('Cloudlight') }}{% endif %}
 {% endblock %}
 
-{% block styles %}
-{{super()}}
-<link rel="stylesheet" href="{{ url_for('static', filename='custom.css') }}">
-{% endblock %}
+    {% block styles %}
+    {{super()}}
+        <link rel="stylesheet" href="{{ url_for('static', filename='custom.css') }}">
+    {% endblock %}
 
 {% block navbar %}
 
@@ -53,7 +53,10 @@
               {{ render_nav_item('main.status', _('Status'), use_li=True) }}
               {{ render_nav_item('main.settings', _('Settings'), use_li=True) }}
               {{ render_nav_item('main.help', _('Help'), use_li=True) }}
-              {{ render_nav_item('main.off', _('Turn Off'), use_li=True) }}
+              {#{ render_nav_item('main.off', _('Turn Off'), use_li=True) }#}
+<!--              <form class="form-inline my-2 my-lg-0">-->
+              <button class="btn btn-outline my-2 my-sm-0" onclick="off();" type="button">Turn Off</button>
+<!--              </form>-->
               {{ render_nav_item('main.pihole', _('PiHole Admin'), use_li=True) }}
           </ul>
       </div>
@@ -88,6 +91,7 @@
     {{ moment.include_moment() }}
     {{ moment.lang(g.locale) }}
     <script>
+        function off() {$.post( "{{url_for('main.off')}}", {data: 'now'});}
         function livecontrol(event) {
             var value;
             switch (event.target.type) {
@@ -96,16 +100,14 @@
                     break;
                 default:
                     value = event.target.value;
-            } //
+            }
             $.post("{{ url_for('main.rediscontrol') }}", {
                 source: event.target.id,
                 value: value,
                 element: event.target.type
             }).done(function(response) {
 
-            }).fail(function() {
-                event.target.value="0";
-            });
+            }).fail(function() {event.target.value="0";});
         }
 
         function setup_redis_inputs() {
@@ -113,33 +115,5 @@
             $("[id^=redischange]").on('change', livecontrol);
         }
         setup_redis_inputs();
-        {% if current_user.is_authenticated %}
-        // function sse() {
-        var source = new EventSource('{{url_for("main.stream")}}');
-        source.addEventListener("update", function (event) {
-            var data = JSON.parse(event.data);
-            Object.entries(data).forEach(function([key, value]) {
-                // console.log("#" + key, value)
-                $(document.getElementById(key)).text(value)
-                // set update blinker
-            });
-        }, false);
-        source.addEventListener("open", function (e) {
-            console.log('Connection was opened: ', e);
-        }, false);
-        source.addEventListener("error", function (e) {
-            console.log("Connection errored out: ", e);
-        }, false);
-        {% endif %}
-        function htmlfor(name, destElem) {
-            // $(destElem).html('<img src="{{ url_for('static', filename='loading.gif') }}">');
-            $.post('/modeform', {
-                data: name,
-            }).done(function(response) {
-                $(destElem).html(response['html'])
-            }).fail(function() {
-                $(destElem).text("{{ _('Error: Could not contact server.') }}");
-            });
-        }
     </script>
 {% endblock %}
