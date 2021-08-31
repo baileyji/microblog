@@ -51,3 +51,13 @@ def email_logs():
         except:
             pass
         _set_task_progress(100)
+
+
+def lamp_to_mode(mode, mode_settings=None, mute=False):
+    redis = app.redis
+    to_store = [(f'lamp:{mode}:settings', mode_settings if mode_settings else {}),
+                (f'lamp:mode', mode)]
+    if mute:
+        to_store.insert(1, ('speaker:effect_volume', 0))
+    redis.store(to_store)
+    to_store.append(redis.store(f'lamp:mode', mode))

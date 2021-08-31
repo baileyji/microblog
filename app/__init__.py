@@ -13,6 +13,7 @@ import cloudlight.cloudredis as cloudredis
 from cloudlight.util import setup_logging
 import threading
 import rq
+import rq_scheduler
 import queue
 import numpy as np
 # try:
@@ -110,7 +111,8 @@ def create_app(config_class=Config):
     moment.init_app(app)
     babel.init_app(app)
     app.redis = cloudredis.setup_redis() #Redis.from_url(app.config['REDIS_URL'])
-    app.task_queue = rq.Queue('cloudlight-tasks', connection=app.redis.redis)
+    app.task_queue = rq.Queue('cloudlight', connection=app.redis.redis)
+    app.scheduler = rq_scheduler.Scheduler('cloudlight', connection=app.redis.redis)
     # app.announcer = MessageAnnouncer()
     # datalistener = threading.Thread(target=datagen, args=(app.redis, app.announcer), daemon=True)
     # datalistener.start()
@@ -144,23 +146,13 @@ def create_app(config_class=Config):
         #     mail_handler.setLevel(logging.ERROR)
         #     app.logger.addHandler(mail_handler)
 
-        # if app.config['LOG_TO_STDOUT']:
-        #     stream_handler = logging.StreamHandler()
-        #     stream_handler.setLevel(logging.INFO)
-        #     app.logger.addHandler(stream_handler)
-        # else:
-        #
-        #     setup_logging('cloud-flask')
-        #     file_handler = RotatingFileHandler('logs/microblog.log',
-        #                                        maxBytes=10240, backupCount=10)
-        #     file_handler.setFormatter(logging.Formatter(
-        #         '%(asctime)s %(levelname)s: %(message)s '
-        #         '[in %(pathname)s:%(lineno)d]'))
-        #     file_handler.setLevel(logging.INFO)
-        #     app.logger.addHandler(file_handler)
-        #
-        # app.logger.setLevel(logging.INFO)
-        setup_logging('cloud-flask')
+        if app.config['LOG_TO_STDOUT']:
+            stream_handler = logging.StreamHandler()
+            stream_handler.setLevel(logging.INFO)
+            app.logger.addHandler(stream_handler)
+        else:
+            setup_logging('cloud-flask')
+
         app.logger.info('Cloudflask startup')
 
     return app

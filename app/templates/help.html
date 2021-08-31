@@ -106,7 +106,7 @@
                     }
 
                 });},
-                2000);
+                5000);
         }
 
         {% for s in services %} update_service_worker("{{s.name}}"); {%endfor%}
@@ -128,36 +128,5 @@
                 }, 10000);
         }
 
-
-        {% if current_user.is_authenticated %}
-        var source = new EventSource('{{url_for("main.stream")}}');
-        source.addEventListener("update", function (event) {
-            var data = JSON.parse(event.data);
-            Object.entries(data).forEach(function([key, value]) {
-                // console.log("#" + key, value)
-                $(document.getElementById(key)).text(value)
-                // set update blinker
-            });
-        }, false);
-        source.addEventListener("open", function (e) {console.log('Connection was opened: ', e);}, false);
-        source.addEventListener("error", function (e) {console.log("Connection errored out: ", e);}, false);
-        source.addEventListener("plotupdate", function (e) {
-            var update = JSON.parse(e.data);
-            var elem = document.getElementById(update['id']);
-            if (elem) {
-                switch (update['kind']) {
-                    case "full":
-                        Plotly.react(update['id'], JSON.parse(update['data']));
-                        break;
-                    case "partial":
-                        Plotly.extendTraces(update['id'], {x: [update['data']['x']], y: [update['data']['y']]}, [0]);
-                        break;
-                }
-            }
-        }, false);
-        // source.addEventListener("service", function (event) {
-        //     var update = JSON.parse(event.data);
-        // }, false);
-        {% endif %}
     </script>
 {% endblock %}

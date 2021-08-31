@@ -2,32 +2,9 @@
 {% from 'bootstrap/form.html' import render_form, render_field %}
 
 {% block app_content %}
-<span id="mode-settings">
-    <div class="dropdown">
-        <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            Lamp Mode
-        </button>
-        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-            {% for key, mode in modes %}
-            <a class="dropdown-item" id="{{key}}-link" href="javascript:htmlfor('{{key}}', '#mode-form');">{{mode}}</a>
-            {% endfor %}
-        </div>
-    </div>
 
-    <span id="mode-form">
-        {% if form %}
-        {% include '_mode_form.html' %}
-        {% endif %}
-    </span>
 
-    <button class="btn" type="button" id="mode-reset" > Load Defaults </button>
-</span>
+{{render_form(form)}}
 
-If beeping doodle-dee-dooting 15 minutes...
-<button class="btn" type="button" id="speaker-power" > Speaker Keepalive </button>
-
-<button class="btn" type="button" id="thermal-alarm-level" > Thermal Limit </button>
-<button class="btn" type="button" id="thermal-alarm-brightness" > Thermal Brightness </button>
-<button class="btn" type="button" id="led-current-limit" > LED Current Limit </button>
 
 {% endblock %}

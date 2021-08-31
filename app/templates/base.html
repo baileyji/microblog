@@ -9,15 +9,20 @@
     {% block styles %}
     {{super()}}
         <link rel="stylesheet" href="{{ url_for('static', filename='custom.css') }}">
+        <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tempusdominus-bootstrap-4/5.39.0/css/tempusdominus-bootstrap-4.css" crossorigin="anonymous" />
     {% endblock %}
 
 {% block navbar %}
 
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
       <a class="navbar-brand" href="{{url_for('main.index')}}">{{_('Cloudlight')}}</a>
+      <button class="btn navbar-btn" onclick="off();" type="button">Off</button>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
+
+
       <div class="collapse navbar-collapse" id="navbarNavDropdown">
           <ul class="navbar-nav">
 
@@ -28,8 +33,8 @@
                   </a>
                   <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
                       <span> Effect Volume
-                          <input class="dropdown-item" type="range" id="redisinput:speaker:effect_volume"
-                                 value="{{g.redis.read('speaker:volume')}}" name="effectvol" min="0" max="1"
+                          <input class="dropdown-item" type="range" id="redisinput:player:effect:volume"
+                                 value="{{g.redis.read('player:effect:volume')}}" name="effectvol" min="0" max="1"
                                  step="0.01"> </span>
                       <span> Effect Brightness
                           <input class="dropdown-item" type="range" id="redisinput:lamp:brightness"
@@ -53,10 +58,6 @@
               {{ render_nav_item('main.status', _('Status'), use_li=True) }}
               {{ render_nav_item('main.settings', _('Settings'), use_li=True) }}
               {{ render_nav_item('main.help', _('Help'), use_li=True) }}
-              {#{ render_nav_item('main.off', _('Turn Off'), use_li=True) }#}
-<!--              <form class="form-inline my-2 my-lg-0">-->
-              <button class="btn btn-outline my-2 my-sm-0" onclick="off();" type="button">Turn Off</button>
-<!--              </form>-->
               {{ render_nav_item('main.pihole', _('PiHole Admin'), use_li=True) }}
           </ul>
       </div>
@@ -90,6 +91,9 @@
     {{ super() }}
     {{ moment.include_moment() }}
     {{ moment.lang(g.locale) }}
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tempusdominus-bootstrap-4/5.39.0/js/tempusdominus-bootstrap-4.min.js" crossorigin="anonymous"></script>
+
     <script>
         function off() {$.post( "{{url_for('main.off')}}", {data: 'now'});}
         function livecontrol(event) {

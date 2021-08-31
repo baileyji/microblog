@@ -21,8 +21,11 @@ import time, json, threading
 import plotly
 import plotly.express as px
 import numpy as np
+from datetime import timedelta
+import datetime
 import json
-from rq.job import Job
+from rq.job import Job, NoSuchJobError
+import pytz
 from cloudlight.fadecandy import EFFECTS
 from .helpers import *
 
@@ -34,7 +37,7 @@ def guess_language(x):
 @bp.before_app_request
 def before_request():
     if current_user.is_authenticated:
-        current_user.last_seen = datetime.utcnow()
+        current_user.last_seen = datetime.datetime.utcnow()
         db.session.commit()
     g.locale = str(get_locale())
     redis = current_app.redis
@@ -56,21 +59,71 @@ def index():
     modes = tuple((key, e.name) for key, e in cloudlight.fadecandy.EFFECTS.items())
     if request.method == 'POST':
         mode = request.form['mode_key']
-        e = EFFECTS[mode]
-        f = e.form(mode_name=e.name, mode_key=e.key)
-        if f.validate_on_submit():
-            settings = f.data
-            for k in ('csrf_token', 'mode_name', 'mode_key', 'submit'):
-                settings.pop(k)
-            g.redis.store(f'lamp:{mode}:settings', settings)
-            if g.redis.read('lamp:mode') == mode:
-                g.redis.store(f'lamp:settings', True, publish_only=True)
-            else:
-                g.redis.store(f'lamp:mode', mode)
+        f = cloudlight.fadecandy.ModeFormV2(mode)
+        if mode == 'off':
+            g.redis.store(f'lamp:mode', mode)
+        elif f.validate_on_submit():
+            settings = f.settings.data
 
-            return redirect(url_for('main.lamp'))
+            if f.schedule_data.schedule.data or f.schedule_data.clear.data:
+                current_app.logger.debug('Clearing Scheduled lamp event')
+                canceled = 'schedule' in current_app.scheduler
+                current_app.scheduler.cancel('schedule')
+                if not f.schedule_data.clear.data:
+                    current_app.logger.debug(f'Scheduling {mode} at {f.schedule_data.at.data}. '
+                                             f'repeat={f.schedule_data.repeat.data}')
+                    current_app.scheduler.schedule(f.schedule_data.at.data.astimezone(pytz.utc),
+                                                   repeat=0 if not f.schedule_data.repeat.data else None,
+                                                   interval=24 * 3600, id='schedule',
+                                                   func=f"cloudlight.cloudflask.app.tasks.lamp_to_mode", args=(mode,),
+                                                   kwargs={'mode_settings': settings, 'mute': f.mute.data})
+                    date = f.schedule_data.at.data.strftime('%I:%M %p on %m/%d/%Y' if not f.schedule_data.repeat.data
+                                                            else 'every day at %I:%M %p')
+                    flashmsg = f'Effect {EFFECTS[mode].name} scheduled for {date}'
+                    flash(flashmsg + (' (replaced previous event).' if canceled else '.'))
+                elif canceled:
+                    flash('Scheduled effect canceled.')
+            else:
+                if f.reset.data:  # reset the effect to the defaults
+                    g.redis.store(f'lamp:{mode}:settings', EFFECTS[mode].defaults)
+                else:  # f.save or f.enable either way update
+                    g.redis.store(f'lamp:{mode}:settings', settings)
+
+                if g.redis.read('lamp:mode') == mode:
+                    g.redis.store(f'lamp:settings', True, publish_only=True)
+
+                if 'mute' in f:
+                    g.redis.store('player:muted', f.mute.data)
+
+                if f.enable.data:
+                    canceled = 'sleep_timer' in current_app.scheduler
+                    current_app.scheduler.cancel('sleep_timer')
+                    if f.sleep_timer.data:
+                        current_app.logger.debug(f'Scheduling sleep timer to turn off in {f.sleep_timer.data} minutes.')
+                        current_app.scheduler.enqueue_in(timedelta(minutes=f.sleep_timer.data),
+                                                         f"cloudlight.cloudflask.app.tasks.lamp_to_mode",
+                                                         'off', job_id='sleep_timer')
+                    if f.sleep_timer.data:
+                        if canceled:
+                            flash('Will now turn off in {f.sleep_timer.data:.0f} minutes.')
+                        else:
+                            flash(f'{EFFECTS[mode].name} will fade out in {f.sleep_timer.data:.0f} minutes.')
+                    elif canceled:
+                        flash('Sleep timer canceled.')
+
+                    g.redis.store(f'lamp:mode', mode)
+            settings = g.redis.read(f'lamp:{mode}:settings')
+
+            morning = datetime.datetime.combine(datetime.date.today() + timedelta(days=1), datetime.time(8, 00))
+            f = cloudlight.fadecandy.ModeFormV2(mode, settings, mute=g.redis.read('player:muted'),
+                                                sleep_timer=0, formdata=None,
+                                                schedule_data={'at': morning, 'repeat': True})
+        return render_template('index.html', title=_('Cloudlight'), modes=modes, form=f, active_mode=g.mode)
     else:
-        f = cloudlight.fadecandy.build_form(g.redis.read('lamp:mode'), g.redis)
+        mode = g.redis.read('lamp:mode')
+        morning = datetime.datetime.combine(datetime.date.today() + timedelta(days=1), datetime.time(8, 00))
+        f = cloudlight.fadecandy.ModeFormV2(mode, g.redis.read(f'lamp:{mode}:settings'),
+                                            schedule_data={'at': morning, 'repeat': True})
 
     return render_template('index.html', title=_('Cloudlight'), modes=modes, form=f, active_mode=g.mode)
 
@@ -98,29 +151,40 @@ def rediscontrol():
 
 
 # Controls need to be named with their redis key
-@bp.route('/stream',  methods=['GET'])
+@bp.route('/stream', methods=['GET'])
 @login_required
 def stream():
     from ....config import REDIS_SCHEMA
-    import cloudlight.cloudredis as clr
-    event = request.args.get('event', 'update', type=str)
-
+    event = request.args.get('event', 'redis', type=str)
+    #
     # @copy_current_request_context
-    def _stream():
-        # for k, v in g.redis.listen(REDIS_SCHEMA['keys']):
-        for k, v in clr.redis.listen(REDIS_SCHEMA['keys']):
-            event = 'update'
-            data = {k: v}
+    def _stream(event):
+        import cloudlight.cloudredis as clr
+        r = clr.setup_redis(use_schema=False, module=False)
+        if event == 'redis':
+            for k, v in r.listen(REDIS_SCHEMA['keys']):
+                yield f"event:update\nretry:5\ndata: {json.dumps({k:v})}\n\n"
+        elif event == 'plot':
+            since = None
+            while True:
+                kind = 'full' if since is None else 'partial'
+                start = datetime.datetime.now() - timedelta(days=.5) if not since else since
+                times, vals = list(zip(*r.range('temp:value_avg120000', start=start)))
+                # since = times[-1]
+                times = np.array(times, dtype='datetime64[ms]')
+                if kind == 'full':
+                    fig = px.line(x=times, y=vals, title='CPU Temperature')
+                    fig.update_xaxes(title_text='Time')
+                    fig.update_yaxes(title_text='Temp (\N{DEGREE SIGN}F)')
+                    figdata = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+                else:
+                    figdata = {'x': times, 'y': vals}
 
-            # plotid = 'temp:value'
-            # since = None
-            # kind = 'full' if since is None else 'partial'
-            # new = list(zip(*redis.range(plotid, since)))
-            # data = {'id': f'redisplot:{plotid}', 'kind': kind, 'data': {'x': new[0], 'y': new[1]}}
+                data = {'id': f'temp-plot', 'kind': kind, 'data': figdata}
+                yield f"event:plotupdate\nretry:5\ndata: {json.dumps(data)}\n\n"
+                time.sleep(15)
 
-            yield f"event:{event}\nretry:5\ndata: {json.dumps(data)}\n\n"
-
-    return current_app.response_class(_stream(), mimetype="text/event-stream")
+    return current_app.response_class(_stream(event), mimetype="text/event-stream")
 
 
 @bp.route('/shutdown', methods=['POST'])
@@ -139,7 +203,6 @@ def shutdown():
 @bp.route('/task', methods=['GET', 'POST'])
 @login_required
 def task():
-    from rq.job import NoSuchJobError
     if request.method == 'POST':
         id = request.form.get('id')
         if id != 'email-logs':
@@ -155,7 +218,7 @@ def task():
             flash(_(f'Task "{id} is currently pending'))
             return bad_request(f'Task "{id}" in progress')
         else:
-            current_app.task_queue.enqueue(f"cloudlight.cloudflask.app.tasks.{id.replace('-','_')}", job_id=id)
+            current_app.task_queue.enqueue(f"cloudlight.cloudflask.app.tasks.{id.replace('-', '_')}", job_id=id)
             return jsonify({'success': True})
 
     else:
@@ -182,16 +245,10 @@ def service():
         return bad_request(f'Service "{name}" does not exist.')
     if request.method == 'POST':
         service.control(request.form['data'])
+        flash('Executing... updating in 5')
         return jsonify({'success': True})
     else:
         return jsonify(service.status_dict())
-
-
-# @bp.route('/favicon.ico')
-# def favicon():
-#     from flask import send_from_directory
-#     return send_from_directory(os.path.join(current_app.root_path, 'static'),
-#                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 
 @bp.route('/status')
@@ -200,26 +257,35 @@ def status():
     from ....config import REDIS_SCHEMA
     table = [('Setting', 'Value')]
     table += [(k, k, v) for k, v in current_app.redis.read(REDIS_SCHEMA['keys']).items()]
-    from datetime import timedelta
-    times, vals = list(zip(*g.redis.range('temp:value_avg120000', start=datetime.now()-timedelta(days=1))))
+    times, vals = list(zip(*g.redis.range('temp:value_avg120000', start=datetime.datetime.now() - timedelta(days=1))))
     times = np.array(times, dtype='datetime64[ms]')
     fig = px.line(x=times, y=vals, title='Temps')
-    # TODO set data_revision based on time interval
     tempfig = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
     return render_template('status.html', title=_('Settings'), table=table, tempfig=tempfig)
 
 
-@bp.route('/settings')
+@bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    return render_template('settings.html', title=_('Settings'))
+    from .forms import CloudControl
+    r2f = {'speaker:keepalive': 'keepalive', 'lamp:overheated_limit': 'thermal_brightness',
+           'temp:alarm_threshold': 'thermal_limit', 'lamp:max_led_level': 'max_led_level'}
+    formdata = {r2f[k]: v for k, v in g.redis.read(r2f.keys()).items()}
+    f = CloudControl(data=formdata)
+    if request.method == 'POST' and f.validate_on_submit():
+        g.redis.store({k: f.data[v] for k, v in r2f.items()})
+    return render_template('settings.html', title=_('Settings'), form=f)
 
 
 @bp.route('/off', methods=['POST'])
 @login_required
 def off():
     g.redis.store('lamp:mode', 'off')
+    canceled = 'sleep_timer' in current_app.scheduler
+    current_app.scheduler.cancel('sleep_timer')
+    if canceled:
+        flash('Sleep timer canceled.')
     return jsonify({'success': True})
 
 
@@ -228,7 +294,6 @@ def off():
 def help():
     from cloudlight.util import get_services as cloudlight_services
     services = cloudlight_services()
-    from rq.job import NoSuchJobError
     try:
         job = Job.fetch('email-logs', connection=g.redis.redis)
         exporting = job.get_status() in ('queued', 'started', 'deferred', 'scheduled')
@@ -247,7 +312,11 @@ def pihole():
 def modeform():
     mode = request.form['data']
     try:
-        form = cloudlight.fadecandy.build_form(mode, g.redis)
+        import datetime
+        morning = datetime.datetime.combine(datetime.date.today() + timedelta(days=1), datetime.time(8, 00))
+        form = cloudlight.fadecandy.ModeFormV2(mode, g.redis.read(f'lamp:{mode}:settings'),
+                                               schedule_data={'at': morning,  # .strftime('%m/%d/%Y %H:%M %p'),
+                                                              'repeat': True}, formdata=None)
         return jsonify({'html': render_template('_mode_form.html', form=form, active_mode=g.mode)})
     except KeyError:
         return bad_request(f'"{mode}" is not known')

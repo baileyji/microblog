@@ -10,6 +10,7 @@
         <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
         <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon.css') }}">
         <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest')}}">
+
         {% block styles %}
             <!-- Bootstrap CSS -->
         {{ bootstrap.load_css() }}
@@ -19,14 +20,14 @@
         {% endblock %}
     </head>
     <body>
+        {{ bootstrap.load_js() }}
         {% block navbar %}{% endblock %}
         <!-- Your page content -->
         {% block content %}{% endblock %}
 
         {% block scripts %}
             <!-- Optional JavaScript -->
-            <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-            {{ bootstrap.load_js() }}
+
         {% endblock %}
     </body>
 </html>

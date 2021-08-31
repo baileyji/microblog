@@ -13,7 +13,7 @@
 
             <div class="row">
                 <div class="col"> <div id="temp-plot" class="responsive-plot"></div> </div>
-                <div class="col"> <div id="bri-plot" class="responsive-plot"></div> </div>
+<!--                <div class="col"> <div id="bri-plot" class="responsive-plot"></div> </div>-->
             </div>
 
             <div class="row">
@@ -47,23 +47,18 @@
     <script>
         var data = {{tempfig | safe}};
         Plotly.react('temp-plot', data); //{#{{ temp_plot[0] | safe }}, {{ temp_plot[1] | safe }}, {{ temp_plot[2] | safe }});#}}
-        // Plotly.react('bri-plot', data);
 
         {% if current_user.is_authenticated %}
-        var source = new EventSource('{{url_for("main.stream")}}');
+        var source = new EventSource('{{url_for("main.stream", event="redis")}}');
         source.addEventListener("update", function (event) {
             var data = JSON.parse(event.data);
             Object.entries(data).forEach(function([key, value]) {
-                // console.log("#" + key, value)
                 $(document.getElementById(key)).text(value)
                 // set update blinker
             });
         }, false);
-        source.addEventListener("open", function (e) {console.log('Connection was opened: ', e);}, false);
-        source.addEventListener("error", function (e) {console.log("Connection errored out: ", e);}, false);
-        {% endif %}
-
-        source.addEventListener("plotupdate", function (event) {
+        var psource = new EventSource('{{url_for("main.stream", event="plot")}}');
+        psource.addEventListener("plotupdate", function (event) {
             var update = JSON.parse(event.data);
             var elem = document.getElementById(update['id']);
             if (elem) {
@@ -77,6 +72,12 @@
                 }
             }
         }, false);
+        // source.addEventListener("open", function (e) {console.log('Connection was opened: ', e);}, false);
+        source.addEventListener("error", function (e) {console.log("Connection errored out: ", e);}, false);
+        // psource.addEventListener("open", function (e) {console.log('Connection was opened: ', e);}, false);
+        psource.addEventListener("error", function (e) {console.log("Connection errored out: ", e);}, false);
+
+        {% endif %}
 
     </script>
 {% endblock %}
