@@ -14,13 +14,11 @@ from cloudlight.util import get_service as cloudlight_service
 from .. import db
 from .forms import EmptyForm
 from ..models import User, Post, Message, Notification
-from ..translate import translate
 from . import bp
 from ..api.errors import bad_request
 import time, json, threading
 import plotly
 import plotly.express as px
-import numpy as np
 from datetime import timedelta
 import datetime
 import json
@@ -154,7 +152,7 @@ def rediscontrol():
 @bp.route('/stream', methods=['GET'])
 @login_required
 def stream():
-    from ....config import REDIS_SCHEMA
+    from ....config import schema_keys
     event = request.args.get('event', 'redis', type=str)
     #
     # @copy_current_request_context
@@ -162,7 +160,7 @@ def stream():
         import cloudlight.cloudredis as clr
         r = clr.setup_redis(use_schema=False, module=False)
         if event == 'redis':
-            for k, v in r.listen(REDIS_SCHEMA['keys']):
+            for k, v in r.listen(schema_keys()):
                 yield f"event:update\nretry:5\ndata: {json.dumps({k:v})}\n\n"
         elif event == 'plot':
             since = None
@@ -254,9 +252,9 @@ def service():
 @bp.route('/status')
 @login_required
 def status():
-    from ....config import REDIS_SCHEMA
+    from ....config import schema_keys
     table = [('Setting', 'Value')]
-    table += [(k, k, v) for k, v in current_app.redis.read(REDIS_SCHEMA['keys']).items()]
+    table += [(k, k, v) for k, v in current_app.redis.read(schema_keys()).items()]
     times, vals = list(zip(*g.redis.range('temp:value_avg120000', start=datetime.datetime.now() - timedelta(days=1))))
     times = np.array(times, dtype='datetime64[ms]')
     fig = px.line(x=times, y=vals, title='Temps')
@@ -264,7 +262,7 @@ def status():
 
     return render_template('status.html', title=_('Settings'), table=table, tempfig=tempfig)
 
-
+#TODO add critical temp? todo make sliders responsive
 @bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():

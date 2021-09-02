@@ -18,7 +18,7 @@ import queue
 import numpy as np
 # try:
 from ...config import Config
-from ...config import REDIS_SCHEMA
+from ...config import schema_keys
 # except ValueError:
 #     from config import Config
 
@@ -82,7 +82,7 @@ class MessageAnnouncer:
 
 def datagen(redis, announcer):
     import json, time
-    for k, v in redis.listen(REDIS_SCHEMA['keys']):
+    for k, v in redis.listen(schema_keys()):
 
         event = 'update'
         data = {k:v}
