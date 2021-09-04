@@ -6,8 +6,8 @@
 {{render_form(form)}}
 {%endif%}
 {% else %}
-<h3>{{ _(form.mode_name.data) }}</h3>
-<div class='row' style="width: 50%">
+    <h3>{{ _(form.mode_name.data) }}</h3>
+
     <form action="" method="post" class="form" role="form">
         {{ form.hidden_tag() }}
         {{ render_hidden_errors(form) }}
@@ -69,5 +69,4 @@
             $(".schedule_info").hide();
         </script>
     </form>
-</div>
 {% endif %}

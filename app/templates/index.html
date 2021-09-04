@@ -2,20 +2,19 @@
 {% from 'bootstrap/form.html' import render_form, render_field %}
 
 {% block app_content %}
-<div class="row">
-    <div class="dropdown">
-        <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton"
-              data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            Lamp Mode
-        </button>
-        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-            {% for key, mode in modes %}
-            <a class="dropdown-item" id="{{key}}-link" href="javascript:modeform('{{key}}');">{{mode}}</a>
-            {% endfor %}
-        </div>
+
+<div class="dropdown">
+    <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        Lamp Mode
+    </button>
+    <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+        {% for key, mode in modes %}
+        <a class="dropdown-item" id="{{key}}-link" href="javascript:modeform('{{key}}');">{{mode}}</a>
+        {% endfor %}
     </div>
 </div>
-<div class="row">
+<div>
     <span id="mode-form">
         {% if form %} {% include '_mode_form.html' %} {% endif %}
     </span>

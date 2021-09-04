@@ -49,16 +49,23 @@
         Plotly.react('temp-plot', data); //{#{{ temp_plot[0] | safe }}, {{ temp_plot[1] | safe }}, {{ temp_plot[2] | safe }});#}}
 
         {% if current_user.is_authenticated %}
-        var source = new EventSource('{{url_for("main.stream", event="redis")}}');
-        source.addEventListener("update", function (event) {
-            var data = JSON.parse(event.data);
+
+        setInterval(function () {$.getJSON('{{url_for("main.redispoll")}}', {keys: 'all'}, update_entries);}, 1000);
+
+        function update_entries(data) {
             Object.entries(data).forEach(function([key, value]) {
                 $(document.getElementById(key)).text(value)
                 // set update blinker
             });
-        }, false);
-        var psource = new EventSource('{{url_for("main.stream", event="plot")}}');
-        psource.addEventListener("plotupdate", function (event) {
+        }
+        // var source = new EventSource('{{url_for("main.redisdata")}}');
+        // source.onmessage = function(event) {
+        //     console.log(event);
+        // };
+
+        // source.addEventListener("update", function (event) {update_entries(JSON.parse(event.data));}, false);
+        var psource = new EventSource('{{url_for("main.plotdata")}}');
+        psource.addEventListener("plot", function (event) {
             var update = JSON.parse(event.data);
             var elem = document.getElementById(update['id']);
             if (elem) {
@@ -73,8 +80,8 @@
             }
         }, false);
         // source.addEventListener("open", function (e) {console.log('Connection was opened: ', e);}, false);
-        source.addEventListener("error", function (e) {console.log("Connection errored out: ", e);}, false);
-        // psource.addEventListener("open", function (e) {console.log('Connection was opened: ', e);}, false);
+        // source.addEventListener("error", function (e) {console.log("Connection errored out: ", e);}, false);
+        psource.addEventListener("open", function (e) {console.log('Connection was opened: ', e);}, false);
         psource.addEventListener("error", function (e) {console.log("Connection errored out: ", e);}, false);
 
         {% endif %}

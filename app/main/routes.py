@@ -1,6 +1,7 @@
 import os
 import subprocess
 from datetime import datetime
+import plotly.graph_objects as go
 
 import numpy as np
 from flask import render_template, flash, redirect, url_for, request, g, \
@@ -18,7 +19,6 @@ from . import bp
 from ..api.errors import bad_request
 import time, json, threading
 import plotly
-import plotly.express as px
 from datetime import timedelta
 import datetime
 import json
@@ -149,40 +149,67 @@ def rediscontrol():
 
 
 # Controls need to be named with their redis key
-@bp.route('/stream', methods=['GET'])
+@bp.route('/plotdata', methods=['GET'])
 @login_required
-def stream():
-    from ....config import schema_keys
-    event = request.args.get('event', 'redis', type=str)
-    #
+def plotdata():
+
     # @copy_current_request_context
-    def _stream(event):
+    def _stream():
+        since = None
         import cloudlight.cloudredis as clr
         r = clr.setup_redis(use_schema=False, module=False)
-        if event == 'redis':
-            for k, v in r.listen(schema_keys()):
-                yield f"event:update\nretry:5\ndata: {json.dumps({k:v})}\n\n"
-        elif event == 'plot':
-            since = None
-            while True:
-                kind = 'full' if since is None else 'partial'
-                start = datetime.datetime.now() - timedelta(days=.5) if not since else since
-                times, vals = list(zip(*r.range('temp:value_avg120000', start=start)))
-                # since = times[-1]
-                times = np.array(times, dtype='datetime64[ms]')
-                if kind == 'full':
-                    fig = px.line(x=times, y=vals, title='CPU Temperature')
-                    fig.update_xaxes(title_text='Time')
-                    fig.update_yaxes(title_text='Temp (\N{DEGREE SIGN}F)')
-                    figdata = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-                else:
-                    figdata = {'x': times, 'y': vals}
+        while True:
+            kind = 'full' if since is None else 'partial'
+            start = datetime.datetime.now() - timedelta(days=.5) if not since else since
+            times, vals = list(zip(*r.range('temp:value_avg120000', start=start)))
+            timescpu, valscpu = list(zip(*r.range('temp:cpu:value_avg120000', start=start)))
+            # since = times[-1]
+            times = np.array(times, dtype='datetime64[ms]')
+            timescpu = np.array(timescpu, dtype='datetime64[ms]')
+            if kind == 'full':
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=times, y=vals, mode='lines', name='Internal'))
+                fig.add_trace(go.Scatter(x=timescpu, y=valscpu, mode='lines', name='CPU'))
+                fig.update_layout(title='Cloud Temps', xaxis_title='Time', yaxis_title='\N{DEGREE SIGN}F')
+                figdata = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+            else:
+                figdata = {'x': times, 'y': vals}
 
-                data = {'id': f'temp-plot', 'kind': kind, 'data': figdata}
-                yield f"event:plotupdate\nretry:5\ndata: {json.dumps(data)}\n\n"
-                time.sleep(15)
+            data = {'id': f'temp-plot', 'kind': kind, 'data': figdata}
+            yield f"event:plot\nretry:5\ndata: {json.dumps(data)}\n\n"
+            time.sleep(15)
 
-    return current_app.response_class(_stream(event), mimetype="text/event-stream")
+    return current_app.response_class(_stream(), mimetype="text/event-stream")
+
+
+# Controls need to be named with their redis key
+@bp.route('/redisdata', methods=['GET'])
+@login_required
+def redisdata():
+    from ....config import schema_keys
+    keys = schema_keys()
+
+    # @copy_current_request_context
+    def _stream():
+        import cloudlight.cloudredis as clr
+        r = clr.setup_redis(use_schema=False, module=False)
+        i=0
+        for k, v in r.listen(keys):
+            print(k,v)
+            yield f"event:update\nretry:5\ndata: {json.dumps({k:v})}\n\n"
+            i+=1
+            if i==5:
+                break
+        time.sleep(1)
+
+    return current_app.response_class(_stream(), mimetype="text/event-stream")
+
+@bp.route('/redispoll', methods=['GET'])
+@login_required
+def redispoll():
+    from ....config import schema_keys
+    return jsonify(g.redis.read(schema_keys()))
+
 
 
 @bp.route('/shutdown', methods=['POST'])
@@ -253,14 +280,25 @@ def service():
 @login_required
 def status():
     from ....config import schema_keys
+    from cloudlight.util import get_wifi_status
+    wifi = get_wifi_status()
+
     table = [('Setting', 'Value')]
     table += [(k, k, v) for k, v in current_app.redis.read(schema_keys()).items()]
-    times, vals = list(zip(*g.redis.range('temp:value_avg120000', start=datetime.datetime.now() - timedelta(days=1))))
+
+    start = datetime.datetime.now() - timedelta(days=1)
+    times, vals = list(zip(*g.redis.range('temp:value_avg120000', start=start)))
+    timescpu, valscpu = list(zip(*g.redis.range('temp:cpu:value_avg120000', start=start)))
     times = np.array(times, dtype='datetime64[ms]')
-    fig = px.line(x=times, y=vals, title='Temps')
+    timescpu = np.array(timescpu, dtype='datetime64[ms]')
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=times, y=vals, mode='lines', name='Internal'))
+    fig.add_trace(go.Scatter(x=timescpu, y=valscpu, mode='lines', name='CPU'))
+    fig.update_layout(title='Cloud Temps', xaxis_title='Time', yaxis_title='\N{DEGREE SIGN}F')
     tempfig = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
-    return render_template('status.html', title=_('Settings'), table=table, tempfig=tempfig)
+    return render_template('status.html', title=_('Status'), table=table, tempfig=tempfig)
+
 
 #TODO add critical temp? todo make sliders responsive
 @bp.route('/settings', methods=['GET', 'POST'])

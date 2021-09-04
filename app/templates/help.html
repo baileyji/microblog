@@ -50,6 +50,7 @@
                                 {{status['toggle_state_command']}}
                             </button>
                             <button type="button" class="btn btn-primary" id="enablebtn-{{service.name}}"
+                                    {# {% if not service.enablable %} disabled {%endif%} #}
                                     onclick="service('{{service.name}}','toggle-enable')">
                                 {{status['toggle_status_command']}}
                             </button>
