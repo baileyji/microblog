@@ -9,9 +9,8 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import redis
-# import rq
+import rq
 from . import db, login
-# from app.search import add_to_index, remove_from_index, query_index
 
 def query_index(*args):
     return 0,0
@@ -157,24 +156,20 @@ class User(UserMixin, PaginatedAPIMixin, db.Model):
         return followed.union(own).order_by(Post.timestamp.desc())
 
     def get_reset_password_token(self, expires_in=600):
-        return jwt.encode(
-            {'reset_password': self.id, 'exp': time() + expires_in},
-            current_app.config['SECRET_KEY'],
-            algorithm='HS256').decode('utf-8')
+        return jwt.encode({'reset_password': self.id, 'exp': time() + expires_in},
+                          current_app.config['SECRET_KEY'], algorithm='HS256')
 
     @staticmethod
     def verify_reset_password_token(token):
         try:
-            id = jwt.decode(token, current_app.config['SECRET_KEY'],
-                            algorithms=['HS256'])['reset_password']
+            id = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])['reset_password']
         except:
             return
         return User.query.get(id)
 
     def new_messages(self):
         last_read_time = self.last_message_read_time or datetime(1900, 1, 1)
-        return Message.query.filter_by(recipient=self).filter(
-            Message.timestamp > last_read_time).count()
+        return Message.query.filter_by(recipient=self).filter(Message.timestamp > last_read_time).count()
 
     def add_notification(self, name, data):
         self.notifications.filter_by(name=name).delete()
@@ -183,13 +178,10 @@ class User(UserMixin, PaginatedAPIMixin, db.Model):
         return n
 
     def launch_task(self, name, description, *args, **kwargs):
-        return None
-        # rq_job = current_app.task_queue.enqueue('app.tasks.' + name, self.id,
-        #                                         *args, **kwargs)
-        # task = Task(id=rq_job.get_id(), name=name, description=description,
-        #             user=self)
-        # db.session.add(task)
-        # return task
+        rq_job = current_app.task_queue.enqueue('app.tasks.' + name, self.id, *args, **kwargs)
+        task = Task(id=rq_job.get_id(), name=name, description=description, user=self)
+        db.session.add(task)
+        return task
 
     def get_tasks_in_progress(self):
         return Task.query.filter_by(user=self, complete=False).all()
@@ -292,12 +284,11 @@ class Task(db.Model):
     complete = db.Column(db.Boolean, default=False)
 
     def get_rq_job(self):
-        return None
-        # try:
-        #     rq_job = rq.job.Job.fetch(self.id, connection=current_app.redis)
-        # except (redis.exceptions.RedisError, rq.exceptions.NoSuchJobError):
-        #     return None
-        # return rq_job
+        try:
+            rq_job = rq.job.Job.fetch(self.id, connection=current_app.redis)
+        except (redis.exceptions.RedisError, rq.exceptions.NoSuchJobError):
+            return None
+        return rq_job
 
     def get_progress(self):
         job = self.get_rq_job()

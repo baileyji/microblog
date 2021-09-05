@@ -16,6 +16,7 @@ from .. import db
 from .forms import EmptyForm
 from ..models import User, Post, Message, Notification
 from . import bp
+from .helpers import *
 from ..api.errors import bad_request
 import time, json, threading
 import plotly
@@ -25,7 +26,8 @@ import json
 from rq.job import Job, NoSuchJobError
 import pytz
 from cloudlight.fadecandy import EFFECTS
-from .helpers import *
+from cloudlight.util import get_system_status
+
 
 
 def guess_language(x):
@@ -280,8 +282,7 @@ def service():
 @login_required
 def status():
     from ....config import schema_keys
-    from cloudlight.util import get_wifi_status
-    wifi = get_wifi_status()
+    system = get_system_status()
 
     table = [('Setting', 'Value')]
     table += [(k, k, v) for k, v in current_app.redis.read(schema_keys()).items()]
@@ -295,9 +296,9 @@ def status():
     fig.add_trace(go.Scatter(x=times, y=vals, mode='lines', name='Internal'))
     fig.add_trace(go.Scatter(x=timescpu, y=valscpu, mode='lines', name='CPU'))
     fig.update_layout(title='Cloud Temps', xaxis_title='Time', yaxis_title='\N{DEGREE SIGN}F')
-    tempfig = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+    fig = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
 
-    return render_template('status.html', title=_('Status'), table=table, tempfig=tempfig)
+    return render_template('status.html', title=_('Status'), table=table, tempfig=fig, system_stat=system)
 
 
 #TODO add critical temp? todo make sliders responsive
@@ -326,8 +327,13 @@ def off():
 
 
 @bp.route('/help')
-@login_required
 def help():
+    return render_template('help.html', title=_('Help'))
+
+
+@bp.route('/services')
+@login_required
+def services():
     from cloudlight.util import get_services as cloudlight_services
     services = cloudlight_services()
     try:
@@ -335,7 +341,7 @@ def help():
         exporting = job.get_status() in ('queued', 'started', 'deferred', 'scheduled')
     except NoSuchJobError:
         exporting = False
-    return render_template('help.html', title=_('Help'), services=services.values(), exporting=exporting)
+    return render_template('services.html', title=_('Services'), services=services.values(), exporting=exporting)
 
 
 @bp.route('/pihole')
