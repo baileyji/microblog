@@ -214,16 +214,18 @@ def redispoll():
     return jsonify(g.redis.read(schema_keys()))
 
 
-
-@bp.route('/shutdown', methods=['POST'])
+@bp.route('/system', methods=['POST'])
 @login_required
-def shutdown():
-    """data: shutdown|reboot """
+def system():
+    """data: shutdown|reboot|reinit """
     cmd = request.form.get('data', '')
     if cmd in ('shutdown', 'reboot'):
         subprocess.Popen(['/home/pi/.local/bin/cloud-service-control', cmd])
         flash(f'System going offline for {cmd}')
         return jsonify({'success': True})
+    elif cmd == 'reinit':
+        import cloudlight.cloudredis as clr
+        clr.setup_redis(module=False, clear=True, use_schema=True)
     else:
         return bad_request('Invalid shutdown command')
 

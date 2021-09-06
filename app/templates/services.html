@@ -58,7 +58,7 @@
                         </button>
                         <button type="button" class="btn btn-warning" onclick="system('reboot')"> Reboot </button>
                         <button type="button" class="btn btn-warning" onclick="system('shutdown')"> Shutdown </button>
-                        <button class="btn btn-danger" type="button" id="reset-database" > Reinitialize redis </button>
+                        <button type="button" class="btn btn-danger" onclick="system('reinit')"> Reinitialize redis </button>
                     </p>
                 </div>
             </main>
@@ -70,7 +70,7 @@
     {{ super() }}
     <script>
         function service(name, action) {$.post( "{{url_for('main.service')}}?name=" + name, {data: action});}
-        function system(action) {$.post( "{{url_for('main.shutdown')}}", {data: action});}
+        function system(action) {$.post( "{{url_for('main.system')}}", {data: action});}
 
         function update_service_worker(name) {
             setInterval(function () {                 //query periodically till done
