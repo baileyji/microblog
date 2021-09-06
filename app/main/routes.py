@@ -62,6 +62,7 @@ def index():
         f = cloudlight.fadecandy.ModeFormV2(mode)
         if mode == 'off':
             g.redis.store(f'lamp:mode', mode)
+            g.redis.store(f'lamp:off:settings', EFFECTS['off'].defaults)
         elif f.validate_on_submit():
             settings = f.settings.data
 
@@ -272,7 +273,7 @@ def service():
         return bad_request(f'Service "{name}" does not exist.')
     if request.method == 'POST':
         service.control(request.form['data'])
-        flash('Executing... updating in 5')
+        # flash('Executing... updating in 5')
         return jsonify({'success': True})
     else:
         return jsonify(service.status_dict())
@@ -357,8 +358,7 @@ def modeform():
         import datetime
         morning = datetime.datetime.combine(datetime.date.today() + timedelta(days=1), datetime.time(8, 00))
         form = cloudlight.fadecandy.ModeFormV2(mode, g.redis.read(f'lamp:{mode}:settings'),
-                                               schedule_data={'at': morning,  # .strftime('%m/%d/%Y %H:%M %p'),
-                                                              'repeat': True}, formdata=None)
+                                               schedule_data={'at': morning, 'repeat': True}, formdata=None)
         return jsonify({'html': render_template('_mode_form.html', form=form, active_mode=g.mode)})
     except KeyError:
         return bad_request(f'"{mode}" is not known')
