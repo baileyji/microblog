@@ -226,6 +226,7 @@ def system():
     elif cmd == 'reinit':
         import cloudlight.cloudredis as clr
         clr.setup_redis(module=False, clear=True, use_schema=True)
+        return jsonify({'success': True})
     else:
         return bad_request('Invalid shutdown command')
 
