@@ -19,11 +19,14 @@
 
             <div>
                 <h4>System Status</h4>
+                Uptime: {{system_stat['uptime']}}
                 <dl class="row">
                     <dt class="col-sm-3">WiFi</dt>
-                    <dd class="col-sm-9">{{system_stat['SSID']}} ({{system_stat['Frequency']}},
+                    <dd class="col-sm-9">SSID: {{system_stat['SSID']}} ({{system_stat['Frequency']}},
                         {{system_stat['Bit Rate']}}, {{system_stat['Signal level']}},
-                        Qual: {{system_stat['Link Quality']}})</dd>
+                        Qual: {{system_stat['Link Quality']}}) <br/>
+                        IP: {{system_stat['ip']}}
+                    </dd>
                 </dl>
                 <dl class="row">
                     <dt class="col-sm-3">CPU Utilization</dt>
