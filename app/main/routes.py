@@ -63,9 +63,16 @@ def index():
         if mode == 'off':
             g.redis.store(f'lamp:mode', mode)
             g.redis.store(f'lamp:off:settings', EFFECTS['off'].defaults)
-        elif f.validate_on_submit():
-            settings = f.settings.data
+        elif not f.validate_on_submit():
+            current_app.logger.warning(f'Validation of {f} failed.')
+            print(f)
+            print(f.errors)
+            print(f.data)
+            print('request form')
+            print(request.form)
+        else:
 
+            settings = f.settings.data
             if f.schedule_data.schedule.data or f.schedule_data.clear.data:
                 current_app.logger.debug('Clearing Scheduled lamp event')
                 canceled = 'schedule' in current_app.scheduler
@@ -117,14 +124,21 @@ def index():
 
             morning = datetime.datetime.combine(datetime.date.today() + timedelta(days=1), datetime.time(8, 00))
             f = cloudlight.fadecandy.ModeFormV2(mode, settings, mute=g.redis.read('player:muted'),
-                                                sleep_timer=0, formdata=None,
-                                                schedule_data={'at': morning, 'repeat': True})
+                                                sleep_timer=0, formdata=None, schedule_data={'at': morning,
+                                                                                             'repeat': True,
+                                                                                             'at2':morning,
+                                                                                             'time':morning,
+                                                                                             'date':morning})
         return render_template('index.html', title=_('Cloudlight'), modes=modes, form=f, active_mode=g.mode)
     else:
         mode = g.redis.read('lamp:mode')
         morning = datetime.datetime.combine(datetime.date.today() + timedelta(days=1), datetime.time(8, 00))
         f = cloudlight.fadecandy.ModeFormV2(mode, g.redis.read(f'lamp:{mode}:settings'),
-                                            schedule_data={'at': morning, 'repeat': True})
+                                            schedule_data={'at': morning, 'repeat': True,
+                                                           'at2': morning,
+                                                           'time': morning,
+                                                           'date': morning
+                                                           })
 
     return render_template('index.html', title=_('Cloudlight'), modes=modes, form=f, active_mode=g.mode)
 
