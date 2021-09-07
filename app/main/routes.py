@@ -96,7 +96,7 @@ def index():
                 if 'mute' in f:
                     g.redis.store('player:muted', f.mute.data)
 
-                if f.enable.data:
+                if f.submit.data:
                     canceled = 'sleep_timer' in current_app.scheduler
                     current_app.scheduler.cancel('sleep_timer')
                     if f.sleep_timer.data:

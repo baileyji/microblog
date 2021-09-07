@@ -11,7 +11,9 @@
     <form action="" method="post" class="form" role="form">
         {{ form.hidden_tag() }}
         {{ render_hidden_errors(form) }}
-
+        <span class="noschedule">
+            {{render_field(form.submit)}}
+        </span>
         <fieldset class="form-group">
             {{ render_field(form.settings) }}
             {% if 'mute' in form %}
@@ -52,7 +54,7 @@
             </div>
         </fieldset>
         <span class="noschedule">
-            {{render_field(form.enable)}}
+            {{render_field(form.submit)}}
         </span>
         <script type="text/javascript">
             $(function () {$('#mode-datetimepicker').datetimepicker();});
