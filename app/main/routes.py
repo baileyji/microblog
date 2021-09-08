@@ -84,7 +84,8 @@ def index():
                                                    repeat=0 if not f.schedule_data.repeat.data else None,
                                                    interval=24 * 3600, id='schedule',
                                                    func=f"cloudlight.cloudflask.app.tasks.lamp_to_mode", args=(mode,),
-                                                   kwargs={'mode_settings': settings, 'mute': f.mute.data})
+                                                   kwargs={'mode_settings': settings,
+                                                           'mute': f.mute.data if 'mute' in f else None})
                     date = f.schedule_data.at.data.strftime('%I:%M %p on %m/%d/%Y' if not f.schedule_data.repeat.data
                                                             else 'every day at %I:%M %p')
                     flashmsg = f'Effect {EFFECTS[mode].name} scheduled for {date}'
